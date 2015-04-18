@@ -4,16 +4,40 @@
 #
 #
 # ********************************************
-import numpy as np
+import numpy
 import argparse
 import os
 from sklearn import metrics
 from sklearn import linear_model
 from sklearn import gaussian_process
 from sklearn.pipeline import Pipeline
+from sklearn.decomposition import TruncatedSVD
 from scipy import sparse
 import timeit
 from math import sqrt
+
+size = 444075
+
+def writeFileArray(dictionary, fileName):
+    # output feature importance for graphs
+    outfile = file(fileName, "w")
+    keys = []
+    header = ""
+    for key in dictionary[0].keys():
+        keys.append(key)
+        header += '"'+str(key) + '",'
+    outfile.write(header + '\n');
+
+    for i in range(len(dictionary)):
+        outLine = ""
+        for key in keys:
+            outLine += str(dictionary[i][key]) + ","
+        outLine += "\n"
+        outfile.write(outLine)
+
+    outfile.close();
+
+
 
 # read a dat file back into python. 
 def read_dat_file(myfile, size):
@@ -25,45 +49,68 @@ def readInputFile(inFileName):
     row = []
     column = []
     data = []
-    inFile = open(inFileNmae)
+    inFile = open(inFileName)
     lines = inFile.readlines()
     for i in range(len(lines)):
         numbers = lines[i].split()
-        row.append(numbers[0])
-        column.append(numbers[1])
-        data.append(numbers[2])
+        row.append(int(numbers[0]))
+        column.append(int(numbers[1]))
+        data.append(int(numbers[2]))
+
     return [row, column, data]
 
-def createMatrix([row, column, data]):
-    matrix = sparse.coo_matrix(data, (row, column), dtype=numpy.float64)
+def createMatrix(row, column, data):
+    matrix = sparse.coo_matrix((data, (row, column)), shape=(size, size), dtype=numpy.float64)
     return matrix
 
-def createSymetricMatrix(matrix, row, column):
-    symMatrix = sparse.coo_matrix(matrix.shape, dtype=numpy.float64)
+def createSymetricMatrix(row, column, data):
+    dataDict = {}
     for i in range(len(row)):
-        total = matrix[row[i], column[i]] + matrix[column[i], row[i]]
-        symMatrix[row[i], column[i]] = total
-        symMatrix[column[i], row[i]] = total
-    return symMatrix
+        key = "%s-%s"%(row[i], column[i])
+        dataDict[key] = data[i]
 
-def predict(clf, X, y, X_test, y_test):
+    newData = []
+    newRow = []
+    newCol = []
+    alreadySeen = {}
+    for i in range(len(row)):
+        key = "%s-%s"%(row[i], column[i])
+        if(key in alreadySeen):
+            continue
+        total = data[i]
+        keySym = "%s-%s"%(column[i], row[i])
+        if(keySym in dataDict):
+            total += dataDict[keySym]
+        newRow.append(row[i])
+        newCol.append(column[i])
+        newData.append(total)
+
+        newRow.append(column[i])
+        newCol.append(row[i])
+        newData.append(total)
+
+        alreadySeen[key] = 1
+        alreadySeen[keySym] = 1
+
+    return createMatrix(newRow, newCol, newData)
+
+def predict(clf, X, row, column):
     start = timeit.default_timer()
-    clf.fit(X, y)
-    print "   predictions done.";
-    predicted = clf.predict(X_test)
-    #probs_train = clf.predict_proba(X)    
-    #probs_test = clf.predict_proba(X_test0)
-    print "   R2:      " + str(metrics.r2_score(y_test, predicted)) # classifier accuracy
-    print "   RSME:    " + str(sqrt(metrics.mean_squared_error(y_test, predicted))) # classifier accuracy
-    #print(metrics.classification_report(y_test, predicted))
+    clf.fit(X)
+    print "   fitting done.";
     stop = timeit.default_timer()
     print "   runtime: " + str(stop - start)
 
-    if args.LinearRegression:
-        return clf.coef_[0]
-    if args.Lasso:
+    if args.SVD:
+        matrixY = clf.components_ 
+        probsY = []
+        for i in range(len(row)):
+            probsY.append(matrixY[row[i]][column[i]])
+        return probsY
+
+    if args.Factorization:
         return clf.coef_
-    if args.RANSAC:
+    if args.Mixature:
         return clf.estimator_.coef_[0]
 
 
@@ -85,57 +132,48 @@ args = parser.parse_args()
 print args;
 
 [row, column, data] = readInputFile(inX)
-X = createMatrix([row, column, data]) # matrix of the frequency data
-symX = createSymetricMatrix(X, row, column)
+[rowY, columnY, dataY] = readInputFile(inY)
+print "row max: %i" % max(row)
+print "col max: %i" % max(column)
 
-print "X shape" + str(X0.shape)
-print "X test shape " + str(X_test0.shape)
-print "Y shape" + str(y.shape)
-print "Y test shape " + str(y_test.shape)
+X = createMatrix(row, column, data) # matrix of the data
+symX = createSymetricMatrix(row, column, data)
 
+print "X    shape: %s    nonZero entries: %i" % (str(X.shape), X.nnz)
+print "Xsym shape: %s    nonZero entries: %i" % (str(symX.shape), symX.nnz)
+print "\n"
 
 # CLASSIFY!
-if args.LinearRegression:
-    print "Linear Regression"
-    outname = "linearRegression"
-    clf = linear_model.LinearRegression()
-    #LinearRegression(copy_X=True, fit_intercept=True, normalize=False)
+if args.SVD:
+    print "SVD"
+    outname = "SVD"
+    clf = TruncatedSVD()
 
-if args.Lasso:
-    alphaIn=5.0
-    print "Lasso: " + str(alphaIn)
-    outname = "lasso"+str(alphaIn)
+if args.Factorization:
+    print "Factorization"
+    outname = "Factorization"
     clf = linear_model.Lasso(alpha=alphaIn)
 
-if args.RANSAC:
-    print "RANSAC"
-    outname = "ransac"
+if args.Mixature:
+    print "Mixature"
+    outname = "Mixature"
     clf = linear_model.RANSACRegressor(linear_model.LinearRegression())
 
 
-if args.LinearRegression or args.Lasso or args.RANSAC:
-    print "Nan = 0"
-    feature_importance0 = predict(clf, X0, y, X_test0, y_test)
+if args.SVD or args.Factorization or args.Mixature:
+    probsY = predict(clf, X, rowY, columnY)
 
-    print "Nan = Average"
-    feature_importanceA = predict(clf, XA, y, X_testA, y_test)
+    probsDict = []
+    for i in range(len(probsY)):
+        probsDict.append({"TestValue":dataY[i], "Probability":probsY})
 
-    print "Nan = Random"
-    feature_importanceR = predict(clf, XR, y, X_testR, y_test)
+    fpr, tpr, thresholds = metrics.roc_curve(probsY, dataY, pos_label=1)
+    rocDict = []
+    for i in range(len(fpr)):
+        rocDict.append({"fpr":fpr[i], "tpr":tpr[i]})
 
-    # output feature importance for graphs
-    outfile = file("feature_importance_" + outname + ".csv", "w")
-    outfile.write('"Feature ID","0 Nans","Average Nans","Random Nans"\n');
-    print len(feature_importance0)
-    for i in range (len(feature_importance0)):
-        outLine = str(i) + ","
-        outLine += str(feature_importance0[i]) + ","
-        outLine += str(feature_importanceA[i]) + ","
-        outLine += str(feature_importanceR[i])
-        outLine += "\n"
-        outfile.write(outLine)
-    outfile.close();
-
+    writeFileArray(rocDict, "%s_roc.csv" % outname)
+    writeFileArray(probsDict, "%s_probs.csv" % outname)
 
 
 
