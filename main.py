@@ -114,66 +114,64 @@ def predict(clf, X, row, column):
         return clf.estimator_.coef_[0]
 
 
+if __name__ == '__main__':
+    # argument parsing.
+    parser = argparse.ArgumentParser(description='Predict Bitcoin.')
+    parser.add_argument("-S", "--SVD", action="store_true", help="run SVD")
+    parser.add_argument("-F", "--Factorization", action="store_true", help="run non-negative factorization model")
+    parser.add_argument("-M", "--Mixature", action="store_true", help="run mixature model")
+
+    # OTHER INPUT VARIABLES
+    outname = "" # assigned later
+    inX = "txTripletsCounts.txt"
+    inY = "testTriplets.txt"
+
+    args = parser.parse_args()
+    print args;
+
+    [row, column, data] = readInputFile(inX)
+    [rowY, columnY, dataY] = readInputFile(inY)
+    print "row max: %i" % max(row)
+    print "col max: %i" % max(column)
+
+    X = createMatrix(row, column, data) # matrix of the data
+    symX = createSymetricMatrix(row, column, data)
+
+    print "X    shape: %s    nonZero entries: %i" % (str(X.shape), X.nnz)
+    print "Xsym shape: %s    nonZero entries: %i" % (str(symX.shape), symX.nnz)
+    print "\n"
+
+    # CLASSIFY!
+    if args.SVD:
+        print "SVD"
+        outname = "SVD"
+        clf = TruncatedSVD()
+
+    if args.Factorization:
+        print "Factorization"
+        outname = "Factorization"
+        clf = linear_model.Lasso(alpha=alphaIn)
+
+    if args.Mixature:
+        print "Mixature"
+        outname = "Mixature"
+        clf = linear_model.RANSACRegressor(linear_model.LinearRegression())
 
 
+    if args.SVD or args.Factorization or args.Mixature:
+        probsY = predict(clf, X, rowY, columnY)
 
-# argument parsing.
-parser = argparse.ArgumentParser(description='Predict Bitcoin.')
-parser.add_argument("-S", "--SVD", action="store_true", help="run SVD")
-parser.add_argument("-F", "--Factorization", action="store_true", help="run non-negative factorization model")
-parser.add_argument("-M", "--Mixature", action="store_true", help="run mixature model")
+        probsDict = []
+        for i in range(len(probsY)):
+            probsDict.append({"TestValue":dataY[i], "Probability":probsY})
 
-# OTHER INPUT VARIABLES
-outname = "" # assigned later
-inX = "txTripletsCounts.txt"
-inY = "testTriplets.txt"
+        fpr, tpr, thresholds = metrics.roc_curve(probsY, dataY, pos_label=1)
+        rocDict = []
+        for i in range(len(fpr)):
+            rocDict.append({"fpr":fpr[i], "tpr":tpr[i]})
 
-args = parser.parse_args()
-print args;
-
-[row, column, data] = readInputFile(inX)
-[rowY, columnY, dataY] = readInputFile(inY)
-print "row max: %i" % max(row)
-print "col max: %i" % max(column)
-
-X = createMatrix(row, column, data) # matrix of the data
-symX = createSymetricMatrix(row, column, data)
-
-print "X    shape: %s    nonZero entries: %i" % (str(X.shape), X.nnz)
-print "Xsym shape: %s    nonZero entries: %i" % (str(symX.shape), symX.nnz)
-print "\n"
-
-# CLASSIFY!
-if args.SVD:
-    print "SVD"
-    outname = "SVD"
-    clf = TruncatedSVD()
-
-if args.Factorization:
-    print "Factorization"
-    outname = "Factorization"
-    clf = linear_model.Lasso(alpha=alphaIn)
-
-if args.Mixature:
-    print "Mixature"
-    outname = "Mixature"
-    clf = linear_model.RANSACRegressor(linear_model.LinearRegression())
-
-
-if args.SVD or args.Factorization or args.Mixature:
-    probsY = predict(clf, X, rowY, columnY)
-
-    probsDict = []
-    for i in range(len(probsY)):
-        probsDict.append({"TestValue":dataY[i], "Probability":probsY})
-
-    fpr, tpr, thresholds = metrics.roc_curve(probsY, dataY, pos_label=1)
-    rocDict = []
-    for i in range(len(fpr)):
-        rocDict.append({"fpr":fpr[i], "tpr":tpr[i]})
-
-    writeFileArray(rocDict, "%s_roc.csv" % outname)
-    writeFileArray(probsDict, "%s_probs.csv" % outname)
+        writeFileArray(rocDict, "%s_roc.csv" % outname)
+        writeFileArray(probsDict, "%s_probs.csv" % outname)
 
 
 
