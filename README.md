@@ -27,3 +27,10 @@ Create pretty graphs(Nick)
 Results:
 violin plots
 ROC curves
+
+Nick's Current Agenda Items:
+-Perform 2D plot of data clusters
+-Derive # of cluster centers from plot
+-Run GMM
+-Derive probabilities
+-Plot ROC curves, etc.
