@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # ********************************************
 # Author: Nora Coler, Nicholas Turner
 # Date: April 2015
@@ -158,13 +159,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print args;
 
-    [row, column, data] = readInputFile(inX)
+    # [row, column, data] = readInputFile(inX)
     [rowY, columnY, dataY] = readInputFile(inY)
-    print "row max: %i" % max(row)
-    print "col max: %i" % max(column)
+    # print "row max: %i" % max(row)
+    # print "col max: %i" % max(column)
 
-    X = createMatrix(row, column, data) # matrix of the data
-    symX = createSymmetricMatrix(row, column, data)
+    X = import_file(inX, symmetric=False) #createMatrix(row, column, data) # matrix of the data
+    symX = import_file(inX) #createSymmetricMatrix(row, column, data)
 
     print "X    shape: %s    nonZero entries: %i" % (str(X.shape), X.nnz)
     print "Xsym shape: %s    nonZero entries: %i" % (str(symX.shape), symX.nnz)
