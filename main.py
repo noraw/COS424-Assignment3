@@ -60,7 +60,7 @@ def readInputFile(inFileName):
     return [row, column, data]
 
 def createMatrix(row, column, data):
-    matrix = sparse.coo_matrix((data, (row, column)), shape=(size, size), dtype=numpy.float64)
+    matrix = sparse.csc_matrix((data, (row, column)), shape=(size, size), dtype=numpy.float64)
     return matrix
 
 def createSymetricMatrix(row, column, data):
@@ -94,24 +94,32 @@ def createSymetricMatrix(row, column, data):
 
     return createMatrix(newRow, newCol, newData)
 
-def predict(clf, X, row, column):
+def predictSVD(clf, X, row, column):
     start = timeit.default_timer()
     clf.fit(X)
     print "   fitting done.";
     stop = timeit.default_timer()
     print "   runtime: " + str(stop - start)
 
-    if args.SVD:
-        matrixY = clf.components_ 
-        probsY = []
-        for i in range(len(row)):
-            probsY.append(matrixY[row[i]][column[i]])
-        return probsY
+    matrixY = clf.components_ 
+    probsY = []
+    for i in range(len(row)):
+        probsY.append(matrixY[row[i]][column[i]])
+    return probsY
 
-    if args.Factorization:
-        return clf.coef_
-    if args.Mixature:
-        return clf.estimator_.coef_[0]
+def testSVD(clf, X, row, column, outname):
+    start = timeit.default_timer()
+    clf.fit(X)
+    print "   fitting done.";
+    stop = timeit.default_timer()
+    print "   runtime: " + str(stop - start)
+
+    ratio = clf.explained_variance_ratio_
+    ratioDict = []
+    for i in range(len(ratio)):
+        ratioDict.append({"Value":i, "Ratio":ratio[i]})
+    writeFileArray(ratioDict, "%s_ratio.csv" % outname)
+
 
 
 if __name__ == '__main__':
@@ -123,6 +131,7 @@ if __name__ == '__main__':
 
     # OTHER INPUT VARIABLES
     outname = "" # assigned later
+    probsY = None
     inX = "txTripletsCounts.txt"
     inY = "testTriplets.txt"
 
@@ -145,7 +154,10 @@ if __name__ == '__main__':
     if args.SVD:
         print "SVD"
         outname = "SVD"
-        clf = TruncatedSVD()
+        clf = TruncatedSVD(n_components=100)
+        testSVD(clf, X, rowY, columnY, outname)
+        #probsY = predictSVD(clf, X, rowY, columnY)
+
 
     if args.Factorization:
         print "Factorization"
@@ -158,12 +170,10 @@ if __name__ == '__main__':
         clf = linear_model.RANSACRegressor(linear_model.LinearRegression())
 
 
-    if args.SVD or args.Factorization or args.Mixature:
-        probsY = predict(clf, X, rowY, columnY)
-
+    if args.SVD or args.Factorization or args.Mixature and probsY:
         probsDict = []
         for i in range(len(probsY)):
-            probsDict.append({"TestValue":dataY[i], "Probability":probsY})
+            probsDict.append({"TestValue":dataY[i], "Probability":probsY[i]})
 
         fpr, tpr, thresholds = metrics.roc_curve(probsY, dataY, pos_label=1)
         rocDict = []
