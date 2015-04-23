@@ -10,15 +10,22 @@ import argparse
 import os
 from sklearn import metrics
 from sklearn import linear_model
-from sklearn import gaussian_process
 from sklearn.pipeline import Pipeline
 from sklearn.decomposition import TruncatedSVD
 from sklearn.preprocessing import scale
+from sklearn.mixture import DPGMM
 from scipy import sparse
 import timeit
 from math import sqrt
 
+# ********************************************
+#Constants 
+inX = "txTripletsCounts.txt"
+inY = "testTriplets.txt"
+
 size = 444075
+# ********************************************
+
 
 def writeFileArray(dictionary, fileName):
     # output feature importance for graphs
@@ -146,6 +153,39 @@ def testSVD(clf, X, row, column, outname):
         ratioDict.append({"Value":i, "Ratio":ratio[i]})
     writeFileArray(ratioDict, "%s_ratio.csv" % outname)
 
+def predict_DPGMM(max_n_comp=100, max_n_iter=500):
+    '''Imports Data, Trains a DPGMM, Generates predictions'''
+
+    print "Importing Data..."
+    X = import_file(inX)
+    Y = import_file(inY)
+    [r, c, d] = sparse.find(Y)
+
+    print "Training Model..."
+    gmm = DPGMM(max_n_comp, n_iter=max_n_iter)
+
+    gmm.fit(X)
+
+    print "Converged = "
+    print gmm.converged_
+
+    print "Generating Mixture Probabilities..."
+    probs = gmm.predict_proba(X)
+
+    preds = []
+
+    for i in range(len(r)):
+
+        sender = r[i]
+        receiver = c[i]
+
+        all_comp_probs = np.multiply(
+            probs[sender, :],
+            probs[receiver, :]
+            )
+
+        final_prob = np.max(all_comp_probs)
+        preds.append(final_prob)
 
 
 if __name__ == '__main__':
@@ -158,8 +198,6 @@ if __name__ == '__main__':
     # OTHER INPUT VARIABLES
     outname = "" # assigned later
     probsY = None
-    inX = "txTripletsCounts.txt"
-    inY = "testTriplets.txt"
 
     args = parser.parse_args()
     print args;
