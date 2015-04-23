@@ -98,16 +98,19 @@ def createSymmetricMatrix(row, column, data):
 def import_file(filename, symmetric = True, normalize = True):
     '''Reads in an input file, returns the sparse matrix'''
 
+    # print "Importing..." #Debug output
     [r, c, d] = readInputFile(filename)
 
+    # print "Creating Matrix..."
     if symmetric:
         res = createSymmetricMatrix(r, c, d)
     else:
         res = createMatrix(r, c, d)
 
+    # print "Normalizing..."
     if normalize:
         res = res.tocsr() # apparently this makes things more efficient
-        res = scale(res, with_mean=False)
+        res = scale(res, with_mean=False, copy=False)
 
     return res
 
