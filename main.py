@@ -1,10 +1,10 @@
 # ********************************************
-# Author: Nora Coler
-# Date: April 10, 2015
+# Author: Nora Coler, Nicholas Turner
+# Date: April 2015
 #
 #
 # ********************************************
-import numpy
+import numpy as np
 import argparse
 import os
 from sklearn import metrics
@@ -12,6 +12,7 @@ from sklearn import linear_model
 from sklearn import gaussian_process
 from sklearn.pipeline import Pipeline
 from sklearn.decomposition import TruncatedSVD
+from sklearn.preprocessing import scale
 from scipy import sparse
 import timeit
 from math import sqrt
@@ -60,10 +61,10 @@ def readInputFile(inFileName):
     return [row, column, data]
 
 def createMatrix(row, column, data):
-    matrix = sparse.csc_matrix((data, (row, column)), shape=(size, size), dtype=numpy.float64)
+    matrix = sparse.csc_matrix((data, (row, column)), shape=(size, size), dtype=np.float64)
     return matrix
 
-def createSymetricMatrix(row, column, data):
+def createSymmetricMatrix(row, column, data):
     dataDict = {}
     for i in range(len(row)):
         key = "%s-%s"%(row[i], column[i])
@@ -93,6 +94,22 @@ def createSymetricMatrix(row, column, data):
         alreadySeen[keySym] = 1
 
     return createMatrix(newRow, newCol, newData)
+
+def import_file(filename, symmetric = True, normalize = True):
+    '''Reads in an input file, returns the sparse matrix'''
+
+    [r, c, d] = readInputFile(filename)
+
+    if symmetric:
+        res = createSymmetricMatrix(r, c, d)
+    else:
+        res = createMatrix(r, c, d)
+
+    if normalize:
+        res = res.tocsr() # apparently this makes things more efficient
+        res = scale(res, with_mean=False)
+
+    return res
 
 def predictSVD(clf, X, row, column):
     start = timeit.default_timer()
@@ -144,7 +161,7 @@ if __name__ == '__main__':
     print "col max: %i" % max(column)
 
     X = createMatrix(row, column, data) # matrix of the data
-    symX = createSymetricMatrix(row, column, data)
+    symX = createSymmetricMatrix(row, column, data)
 
     print "X    shape: %s    nonZero entries: %i" % (str(X.shape), X.nnz)
     print "Xsym shape: %s    nonZero entries: %i" % (str(symX.shape), symX.nnz)
