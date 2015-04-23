@@ -113,15 +113,20 @@ def import_file(filename, symmetric = True, normalize = True):
 
 def predictSVD(clf, X, row, column):
     start = timeit.default_timer()
-    clf.fit(X)
+    v = clf.fit_transform(X)
     print "   fitting done.";
     stop = timeit.default_timer()
     print "   runtime: " + str(stop - start)
+    u = clf.components_ 
+    d = clf.explained_variance_
 
     matrixY = clf.components_ 
     probsY = []
     for i in range(len(row)):
-        probsY.append(matrixY[row[i]][column[i]])
+        prob = np.sum(np.dot(u[:,column[i]], v[row[i],:]) * d)
+        if(prob < 0): prob = 0
+        if(prob > 1): prob = 1
+        probsY.append(prob)
     return probsY
 
 def testSVD(clf, X, row, column, outname):
@@ -171,9 +176,9 @@ if __name__ == '__main__':
     if args.SVD:
         print "SVD"
         outname = "SVD"
-        clf = TruncatedSVD(n_components=100)
-        testSVD(clf, X, rowY, columnY, outname)
-        #probsY = predictSVD(clf, X, rowY, columnY)
+        clf = TruncatedSVD(n_components=50)
+        #testSVD(clf, X, rowY, columnY, outname)
+        probsY = predictSVD(clf, X, rowY, columnY)
 
 
     if args.Factorization:
