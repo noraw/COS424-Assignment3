@@ -177,8 +177,8 @@ if __name__ == '__main__':
         print "SVD"
         outname = "SVD"
         clf = TruncatedSVD(n_components=50)
-        #testSVD(clf, X, rowY, columnY, outname)
-        probsY = predictSVD(clf, X, rowY, columnY)
+        testSVD(clf, X, rowY, columnY, outname)
+        #probsY = predictSVD(clf, X, rowY, columnY)
 
 
     if args.Factorization:
@@ -192,7 +192,7 @@ if __name__ == '__main__':
         clf = linear_model.RANSACRegressor(linear_model.LinearRegression())
 
 
-    if args.SVD or args.Factorization or args.Mixature and probsY:
+    if ((args.SVD or args.Factorization or args.Mixature) and probsY != None):
         probsDict = []
         for i in range(len(probsY)):
             probsDict.append({"TestValue":dataY[i], "Probability":probsY[i]})
