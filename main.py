@@ -226,9 +226,9 @@ if __name__ == '__main__':
     if args.SVD:
         print "SVD"
         outname = "SVD"
-        clf = TruncatedSVD(n_components=50)
-        testSVD(clf, X, rowY, columnY, outname)
-        #probsY = predictSVD(clf, X, rowY, columnY)
+        clf = TruncatedSVD(n_components=90)
+        #testSVD(clf, X, rowY, columnY, outname)
+        probsY = predictSVD(clf, X, rowY, columnY)
 
 
     if args.Factorization:

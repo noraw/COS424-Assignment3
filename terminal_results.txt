@@ -1,0 +1,24 @@
+testSVD
+ncoler@Pinky:~/Nora_Data/COS424-Assignment3$ python main.py -S
+Namespace(Factorization=False, Mixature=False, SVD=True)
+X    shape: (444075, 444075)    nonZero entries: 3348026
+Xsym shape: (444075, 444075)    nonZero entries: 5570970
+
+
+SVD
+   fitting done.
+   runtime: 115.731765032
+
+
+
+SVD cut off at .001, number 90
+ncoler@Pinky:~/Nora_Data/COS424-Assignment3$ python main.py -S
+Namespace(Factorization=False, Mixature=False, SVD=True)
+X    shape: (444075, 444075)    nonZero entries: 3348026
+Xsym shape: (444075, 444075)    nonZero entries: 5570970
+
+
+SVD
+   fitting done.
+   runtime: 96.1609170437
+
