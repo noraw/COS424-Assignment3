@@ -17,6 +17,7 @@ from sklearn.mixture import DPGMM
 from scipy import sparse
 import timeit
 from math import sqrt
+from sklearn.externals import joblib
 
 # ********************************************
 #Constants 
@@ -177,6 +178,7 @@ def predict_DPGMM(max_n_comp=100, max_n_iter=500):
 
     print "Generating Mixture Probabilities..."
     probs = gmm.predict_proba(X)
+    joblib.dump(probs, "DPGMM.probs")
 
     preds = []
 
