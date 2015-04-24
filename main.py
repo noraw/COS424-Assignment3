@@ -185,8 +185,10 @@ def predict_DPGMM(max_n_comp=100, max_n_iter=500):
             )
 
         final_prob = np.max(all_comp_probs)
-        preds.append(final_prob)
-
+        preds.append({
+            "ids":(sender, receiver),
+            "probability": final_prob})
+    writeFileArray(preds, "GPMM_preds.csv")
 
 if __name__ == '__main__':
     # argument parsing.
