@@ -167,10 +167,13 @@ def predict_DPGMM(max_n_comp=100, max_n_iter=500):
     print "Training Model..."
     gmm = DPGMM(max_n_comp, n_iter=max_n_iter)
 
+    start = timeit.default_timer()
     gmm.fit(rX)
+    end = timeit.default_timer()
 
     print "Converged = "
     print gmm.converged_
+    print "Ran for %f seconds" % (end-start)
 
     print "Generating Mixture Probabilities..."
     probs = gmm.predict_proba(X)
