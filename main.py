@@ -161,10 +161,13 @@ def predict_DPGMM(max_n_comp=100, max_n_iter=500):
     Y = import_file(inY)
     [r, c, d] = sparse.find(Y)
 
+    print "Performing Dimension Reduction to 15 components"
+    rX = TruncatedSVD(15).fit_transform(X)
+
     print "Training Model..."
     gmm = DPGMM(max_n_comp, n_iter=max_n_iter)
 
-    gmm.fit(X)
+    gmm.fit(rX)
 
     print "Converged = "
     print gmm.converged_
@@ -185,8 +188,10 @@ def predict_DPGMM(max_n_comp=100, max_n_iter=500):
             )
 
         final_prob = np.max(all_comp_probs)
-        preds.append(final_prob)
-
+        preds.append({
+            "ids":(sender, receiver),
+            "probability": final_prob})
+    writeFileArray(preds, "GPMM_preds.csv")
 
 if __name__ == '__main__':
     # argument parsing.
