@@ -47,8 +47,6 @@ def writeFileArray(dictionary, fileName):
 
     outfile.close();
 
-
-
 # read a dat file back into python. 
 def read_dat_file(myfile, size):
     array = np.fromfile(myfile, dtype=np.float64, count=-1, sep="")
@@ -158,7 +156,7 @@ def testSVD(clf, X, row, column, outname):
         ratioDict.append({"Value":i, "Ratio":ratio[i]})
     writeFileArray(ratioDict, "%s_ratio.csv" % outname)
 
-def multiple_trial_DPGMM(n_trials=5, n_dim=15, max_n_comp=1000, max_n_iter=500):
+def multiple_trial_DPGMM(n_trials=5, n_dim=15, max_n_comp=500, max_n_iter=500):
 
     print "Importing Data..."
     X = import_file(inX)
@@ -196,7 +194,7 @@ def train_DPGMM(d, max_n_comp=100, max_n_iter=500):
     gmm = DPGMM(max_n_comp, n_iter=max_n_iter)
 
     start = timeit.default_timer()
-    gmm.fit(rX)
+    gmm.fit(d)
     end = timeit.default_timer()
 
     print "Training completed in %f seconds" % (end-start)
@@ -231,8 +229,9 @@ def generate_GMM_prediction_probs(probs):
             "probability": final_prob})
     writeFileArray(preds, "GPMM_preds.csv")
 
-def run_DPGMM():
-    gmm, probs = multiple_trial_DPGMM(5)
+def run_DPGMM(n_trials=5):
+    gmm, probs = multiple_trial_DPGMM(n_trials)
+    joblib.dump(gmm, "DPGMM")
     generate_GMM_prediction_probs(probs)
 
 if __name__ == '__main__':
