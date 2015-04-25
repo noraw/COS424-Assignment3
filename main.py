@@ -123,6 +123,10 @@ def import_file(filename, symmetric = True, normalize = True):
 
     return res
 
+def data_log_likelihood(model, data):
+    '''Determines the log likelihood over the passed dataset'''
+    return sum(model.score(data))
+
 def predictSVD(clf, X, row, column):
     start = timeit.default_timer()
     v = clf.fit_transform(X)
@@ -154,16 +158,39 @@ def testSVD(clf, X, row, column, outname):
         ratioDict.append({"Value":i, "Ratio":ratio[i]})
     writeFileArray(ratioDict, "%s_ratio.csv" % outname)
 
-def predict_DPGMM(max_n_comp=100, max_n_iter=500):
-    '''Imports Data, Trains a DPGMM, Generates predictions'''
+def multiple_trial_DPGMM(n_trials=5, n_dim=15, max_n_comp=1000, max_n_iter=500):
 
     print "Importing Data..."
     X = import_file(inX)
-    Y = import_file(inY)
-    [r, c, d] = sparse.find(Y)
 
-    print "Performing Dimension Reduction to 15 components"
-    rX = TruncatedSVD(15).fit_transform(X)
+    print "Performing Dimension Reduction to %d components..." % n_dim
+    rX = TruncatedSVD(n_dim).fit_transform(X)
+
+    loglikelihood = 1
+    final_model = DPGMM()
+
+    for i in range(n_trials):
+        print "Restart #%d" % i
+
+        new_gmm = train_DPGMM(rX, max_n_comp, max_n_iter)
+        new_likelihood = data_log_likelihood(new_gmm, rX)
+        print "Likelihood: %f" % new_likelihood
+
+        new_model_is_better = (
+            new_likelihood > loglikelihood or 
+            loglikelihood == 1 # No current model
+            )
+
+        if new_model_is_better:
+            loglikelihood = new_likelihood
+            final_model = new_gmm
+
+    probs = final_model.predict_proba(rX)
+
+    return final_model, probs
+
+def train_DPGMM(d, max_n_comp=100, max_n_iter=500):
+    '''Imports Data, Trains a DPGMM, Generates predictions testing'''
 
     print "Training Model..."
     gmm = DPGMM(max_n_comp, n_iter=max_n_iter)
@@ -172,13 +199,19 @@ def predict_DPGMM(max_n_comp=100, max_n_iter=500):
     gmm.fit(rX)
     end = timeit.default_timer()
 
-    print "Converged = "
-    print gmm.converged_
-    print "Ran for %f seconds" % (end-start)
+    print "Training completed in %f seconds" % (end-start)
 
-    print "Generating Mixture Probabilities..."
-    probs = gmm.predict_proba(X)
-    joblib.dump(probs, "DPGMM.probs")
+    print
+    print "Converged: "
+    print gmm.converged_
+    print
+
+    return gmm
+
+def generate_GMM_prediction_probs(probs):
+
+    Y = import_file(inY)
+    [r, c, d] = sparse.find(Y)
 
     preds = []
 
@@ -197,6 +230,10 @@ def predict_DPGMM(max_n_comp=100, max_n_iter=500):
             "ids":(sender, receiver),
             "probability": final_prob})
     writeFileArray(preds, "GPMM_preds.csv")
+
+def run_DPGMM():
+    gmm, probs = multiple_trial_DPGMM(5)
+    generate_GMM_prediction_probs(probs)
 
 if __name__ == '__main__':
     # argument parsing.
