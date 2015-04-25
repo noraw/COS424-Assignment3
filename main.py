@@ -239,7 +239,8 @@ def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1):
     if num_data_points > 0:
         rX = rX[:num_data_points,:]
 
-    gmm = GMM(num_components, n_iter=1000, n_init=num_trials)
+    gmm = GMM(num_components, covariance_type='spherical',
+        n_iter=1000, n_init=num_trials)
 
     print "Training GMM (%d initializations)..." % (num_trials)
     start = timeit.default_timer()
@@ -273,7 +274,8 @@ def train_spectral_GMM(num_components=2, num_trials=1, num_data_points=-1):
     if num_data_points > 0:
         components = components[:num_data_points,:]
 
-    gmm = GMM(num_components, n_iter=1000, n_init=num_trials)
+    gmm = GMM(num_components, covariance_type='spherical', 
+        n_iter=1000, n_init=num_trials)
 
     print "Training GMM (%d initializations)..." % num_trials
     start = timeit.default_timer()
