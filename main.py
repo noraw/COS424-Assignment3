@@ -17,8 +17,10 @@ from sklearn.mixture import GMM, DPGMM
 from sklearn.preprocessing import scale
 from sklearn.manifold import Isomap
 from scipy import sparse
+from scipy.sparse.linalg import svds
 import timeit
 from math import sqrt
+from sklearn.metrics import roc_curve, auc
 from sklearn.externals import joblib
 
 # ********************************************
@@ -147,6 +149,49 @@ def data_log_likelihood(model, data):
     '''Determines the log likelihood over the passed dataset'''
     return sum(model.score(data))
 
+def isomap_data(symmetric=True, num_data_points=-1):
+    '''Manifold learning function for visualization, currently doesn't work
+    since it tries to form the dense matrix (which all manifold learning strats
+    seem to do)'''
+
+    print "Importing Data..."
+    if symmetric:
+        X = import_file(inX)
+    else:
+        X = import_file(inX, symmetric=False)
+
+    print "Performing initial SVD to 15 dimensions..."
+    rX = TruncatedSVD(15).fit_transform(X)
+
+    #Limiting projection to input number of data points
+    if num_data_points > 0:
+        rX = rX[:num_data_points,:]
+
+    print "Initial data dimensions"
+    print rX.shape
+
+    rrX = Isomap().fit_transform(rX)
+
+    return rrX
+
+def plot_projected_data(d):
+    '''plots a 2D projected version of the data'''
+    plt.scatter(d[:,0],d[:,1])
+    plt.show()
+
+def plot_roc_curve(probs):
+
+    [r, c, d] = readInputFile(inY)
+    d = np.array(d)
+
+    fpr, tpr, _ = roc_curve(d, probs)
+
+    print "Area Under Curve: "
+    print auc(fpr, tpr)
+
+    plt.plot(fpr, tpr)
+    plt.show()
+
 # ********************************************
 # ********************************************
 # Training and Prediction Functions
@@ -182,45 +227,14 @@ def testSVD(clf, X, row, column, outname):
         ratioDict.append({"Value":i, "Ratio":ratio[i]})
     writeFileArray(ratioDict, "%s_ratio.csv" % outname)
 
-# # I'm pretty sure that this is a bad idea now
-# def multiple_trial_DPGMM(n_trials=5, n_dim=15, max_n_comp=500, max_n_iter=500):
-
-#     print "Importing Data..."
-#     X = import_file(inX)
-
-#     print "Performing Dimension Reduction to %d components..." % n_dim
-#     rX = TruncatedSVD(n_dim).fit_transform(X)
-
-#     loglikelihood = 1
-#     final_model = DPGMM()
-
-#     for i in range(n_trials):
-#         print "Restart #%d" % i
-
-#         new_gmm = train_DPGMM(rX, max_n_comp, max_n_iter)
-#         new_likelihood = data_log_likelihood(new_gmm, rX)
-#         print "Likelihood: %f" % new_likelihood
-
-#         new_model_is_better = (
-#             new_likelihood > loglikelihood or 
-#             loglikelihood == 1 # No current model
-#             )
-
-#         if new_model_is_better:
-#             loglikelihood = new_likelihood
-#             final_model = new_gmm
-
-#     probs = final_model.predict_proba(rX)
-
-#     return final_model, probs
-
 def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1):
 
     print 'Importing Data...'
-    X = import_file(inX)
+    X = import_file(inX, symmetric=False, normalize=False)
 
     print 'Performing svd to %d components...' % (num_components)
-    rX = TruncatedSVD(num_components).fit_transform(X)
+    u, s, vt = svds(X,num_components)
+    rX = vt.transpose()
 
     if num_data_points > 0:
         rX = rX[:num_data_points,:]
@@ -231,11 +245,14 @@ def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1):
     start = timeit.default_timer()
     gmm.fit(rX)
     end = timeit.default_timer()
+
     print "Training completed in %f seconds" % (end-start)
+    print "Converged = "
+    print gmm.converged_
 
     print "Forming predictions..."
     start = timeit.default_timer()
-    gmm.predict_proba(rX)
+    probs = gmm.predict_proba(rX)
     end = timeit.default_timer()
     print "Prediction completed in %f seconds" % (end-start)
 
@@ -244,16 +261,14 @@ def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1):
 def train_spectral_GMM(num_components=2, num_trials=1, num_data_points=-1):
 
     print "Importing Data..."
-    X = import_file(inX)
+    X = import_file(inX, symmetric=False, normalize=False)
 
     print "Forming Graph Laplacian..."
     L = make_graph_laplacian(X)
 
     print "Performing svd to %d components..." % (num_components)
-    svd = TruncatedSVD(num_components)
-    svd.fit(L)
-    components = svd.components_.transpose()
-    print components.shape
+    u, s, vt = svds(L, num_components)
+    components = u
 
     if num_data_points > 0:
         components = components[:num_data_points,:]
@@ -296,11 +311,10 @@ def train_DPGMM(d, max_n_comp=100, max_n_iter=500):
 
     return gmm
 
-def GMM_prediction_probs_max(probs):
+def GMM_prediction_probs_max(probs, save=True):
 
     print "Importing Data..."
-    Y = import_file(inY)
-    [r, c, d] = sparse.find(Y)
+    [r, c, d] = readInputFile(inY)
 
     preds = []
 
@@ -320,14 +334,16 @@ def GMM_prediction_probs_max(probs):
             "ids":(sender, receiver),
             "probability": final_prob})
         
-    print "Saving predictions..."
-    writeFileArray(preds, outname)
+    if save:
+        print "Saving predictions..."
+        writeFileArray(preds, outname)
 
-def GMM_prediction_probs_dot(probs):
+    return np.array([elem['probability'] for elem in preds])
+
+def GMM_prediction_probs_dot(probs, save=True):
 
     print "Importing Data..."
-    Y = import_file(inY)
-    [r, c, d] = sparse.find(Y)
+    [r, c, d] = readInputFile(inY)
 
     preds = []
 
@@ -342,40 +358,21 @@ def GMM_prediction_probs_dot(probs):
             probs[receiver, :]
             )
 
-    final_prob = np.sum(all_comp_probs)
-    preds.append({
-        "ids": (sender, receiver)
-        "probability": final_prob
-        })
-    print "Saving predictions..."
-    writeFileArray(preds, outname)
+        final_prob = np.sum(all_comp_probs)
+        preds.append({
+            "ids": (sender, receiver),
+            "probability": final_prob
+            })
 
-def isomap_data(symmetric=True, num_data_points=-1):
+    if save:
+        print "Saving predictions..."
+        writeFileArray(preds, outname)
 
-    print "Importing Data..."
-    if symmetric:
-        X = import_file(inX)
-    else:
-        X = import_file(inX, symmetric=False)
+    return np.array([elem['probability'] for elem in preds])
 
-    print "Performing initial SVD to 15 dimensions..."
-    rX = TruncatedSVD(15).fit_transform(X)
-
-    #Limiting projection to input number of data points
-    if num_data_points > 0:
-        rX = rX[:num_data_points,:]
-
-    print "Initial data dimensions"
-    print rX.shape
-
-    rrX = Isomap().fit_transform(rX)
-
-    return rrX
-
-def plot_projected_data(d):
-    '''plots a 2D projected version of the data'''
-    plt.scatter(d[:,0],d[:,1])
-    plt.show()
+# ********************************************
+# ********************************************
+# Command-Line Functionality
 
 if __name__ == '__main__':
     # argument parsing.
@@ -437,5 +434,39 @@ if __name__ == '__main__':
         writeFileArray(probsDict, "%s_probs.csv" % outname)
 
 
+# ********************************************
+# ********************************************
+# Temporary Junk
 
 
+# # I'm pretty sure that this is a bad idea now
+# def multiple_trial_DPGMM(n_trials=5, n_dim=15, max_n_comp=500, max_n_iter=500):
+
+#     print "Importing Data..."
+#     X = import_file(inX)
+
+#     print "Performing Dimension Reduction to %d components..." % n_dim
+#     rX = TruncatedSVD(n_dim).fit_transform(X)
+
+#     loglikelihood = 1
+#     final_model = DPGMM()
+
+#     for i in range(n_trials):
+#         print "Restart #%d" % i
+
+#         new_gmm = train_DPGMM(rX, max_n_comp, max_n_iter)
+#         new_likelihood = data_log_likelihood(new_gmm, rX)
+#         print "Likelihood: %f" % new_likelihood
+
+#         new_model_is_better = (
+#             new_likelihood > loglikelihood or 
+#             loglikelihood == 1 # No current model
+#             )
+
+#         if new_model_is_better:
+#             loglikelihood = new_likelihood
+#             final_model = new_gmm
+
+#     probs = final_model.predict_proba(rX)
+
+#     return final_model, probs
