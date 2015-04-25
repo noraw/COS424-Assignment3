@@ -8,12 +8,14 @@
 import numpy as np
 import argparse
 import os
+import matplotlib.pyplot as plt
 from sklearn import metrics
 from sklearn import linear_model
 from sklearn.pipeline import Pipeline
 from sklearn.decomposition import TruncatedSVD
+from sklearn.mixture import GMM, DPGMM
 from sklearn.preprocessing import scale
-from sklearn.mixture import DPGMM
+from sklearn.manifold import Isomap
 from scipy import sparse
 import timeit
 from math import sqrt
@@ -121,6 +123,60 @@ def import_file(filename, symmetric = True, normalize = True):
 
     return res
 
+def fake_inverse(D):
+    '''Take the elementwise inverse of a sparse matrix'''
+
+    [r, c, d] = sparse.find(D)
+    dinv = 1 / d
+    return sparse.csr_matrix((dinv, (r, c)), shape=D.shape)
+
+def make_graph_laplacian(W):
+    '''Creates the (normalized) graph laplacian of the weight matrix W'''
+
+    D = sparse.diags(W.sum(0),[0], shape=W.shape)
+    Dinv = fake_inverse(D)
+
+    I = sparse.eye(D.shape[0],D.shape[1])
+
+    L = I - Dinv * W
+
+    return L
+
+def train_spectral_GMM(num_components=2, num_data_points = -1):
+
+    print "Importing Data..."
+    X = import_file(inX)
+
+    print "Forming Graph Laplacian..."
+    L = make_graph_laplacian(X)
+
+    print "Performing svd to %d components..." % (num_components)
+    svd = TruncatedSVD(num_components)
+    svd.fit(L)
+    components = svd.components_.transpose()
+
+    if num_data_points > 0:
+        components = components[:num_data_points,:]
+
+    gmm = GMM(num_components)
+
+    print "Training GMM..."
+    start = timeit.default_timer()
+    gmm.fit(components)
+    end = timeit.default_timer()
+
+    print "Fitting completed in %f seconds" % (end-start)
+    print "Converged = "
+    print gmm.converged_
+
+    print "Forming predictions..."
+    start = timeit.default_timer()
+    probs = gmm.predict_proba(components)
+    end = timeit.default_timer()
+    print "Prediction completed in %f seconds" % (end - start)
+
+    return gmm, probs
+
 def data_log_likelihood(model, data):
     '''Determines the log likelihood over the passed dataset'''
     return sum(model.score(data))
@@ -206,7 +262,7 @@ def train_DPGMM(d, max_n_comp=100, max_n_iter=500):
 
     return gmm
 
-def generate_GMM_prediction_probs(probs):
+def GMM_prediction_probs_max(probs):
 
     Y = import_file(inY)
     [r, c, d] = sparse.find(Y)
@@ -233,6 +289,33 @@ def run_DPGMM(n_trials=5):
     gmm, probs = multiple_trial_DPGMM(n_trials)
     joblib.dump(gmm, "DPGMM")
     generate_GMM_prediction_probs(probs)
+
+def isomap_data(symmetric=True, num_data_points=-1):
+
+    print "Importing Data..."
+    if symmetric:
+        X = import_file(inX)
+    else:
+        X = import_file(inX, symmetric=False)
+
+    print "Performing initial SVD to 15 dimensions..."
+    rX = TruncatedSVD(15).fit_transform(X)
+
+    #Limiting projection to input number of data points
+    if num_data_points > 0:
+        rX = rX[:num_data_points,:]
+
+    print "Initial data dimensions"
+    print rX.shape
+
+    rrX = Isomap().fit_transform(rX)
+
+    return rrX
+
+def plot_projected_data(d):
+    '''plots a 2D projected version of the data'''
+    plt.scatter(d[:,0],d[:,1])
+    plt.show()
 
 if __name__ == '__main__':
     # argument parsing.
