@@ -28,7 +28,8 @@ inY = "testTriplets.txt"
 
 size = 444075
 # ********************************************
-
+# ********************************************
+# Utility Functions
 
 def writeFileArray(dictionary, fileName):
     # output feature importance for graphs
@@ -123,7 +124,7 @@ def import_file(filename, symmetric = True, normalize = True):
 
     return res
 
-def fake_inverse(D):
+def element_inverse(D):
     '''Take the elementwise inverse of a sparse matrix'''
 
     [r, c, d] = sparse.find(D)
@@ -134,7 +135,7 @@ def make_graph_laplacian(W):
     '''Creates the (normalized) graph laplacian of the weight matrix W'''
 
     D = sparse.diags(W.sum(0),[0], shape=W.shape)
-    Dinv = fake_inverse(D)
+    Dinv = element_inverse(D) # this works since it's diagonal
 
     I = sparse.eye(D.shape[0],D.shape[1])
 
@@ -142,44 +143,13 @@ def make_graph_laplacian(W):
 
     return L
 
-def train_spectral_GMM(num_components=2, num_data_points = -1):
-
-    print "Importing Data..."
-    X = import_file(inX)
-
-    print "Forming Graph Laplacian..."
-    L = make_graph_laplacian(X)
-
-    print "Performing svd to %d components..." % (num_components)
-    svd = TruncatedSVD(num_components)
-    svd.fit(L)
-    components = svd.components_.transpose()
-
-    if num_data_points > 0:
-        components = components[:num_data_points,:]
-
-    gmm = GMM(num_components)
-
-    print "Training GMM..."
-    start = timeit.default_timer()
-    gmm.fit(components)
-    end = timeit.default_timer()
-
-    print "Fitting completed in %f seconds" % (end-start)
-    print "Converged = "
-    print gmm.converged_
-
-    print "Forming predictions..."
-    start = timeit.default_timer()
-    probs = gmm.predict_proba(components)
-    end = timeit.default_timer()
-    print "Prediction completed in %f seconds" % (end - start)
-
-    return gmm, probs
-
 def data_log_likelihood(model, data):
     '''Determines the log likelihood over the passed dataset'''
     return sum(model.score(data))
+
+# ********************************************
+# ********************************************
+# Training and Prediction Functions
 
 def predictSVD(clf, X, row, column):
     start = timeit.default_timer()
@@ -212,36 +182,100 @@ def testSVD(clf, X, row, column, outname):
         ratioDict.append({"Value":i, "Ratio":ratio[i]})
     writeFileArray(ratioDict, "%s_ratio.csv" % outname)
 
-def multiple_trial_DPGMM(n_trials=5, n_dim=15, max_n_comp=500, max_n_iter=500):
+# # I'm pretty sure that this is a bad idea now
+# def multiple_trial_DPGMM(n_trials=5, n_dim=15, max_n_comp=500, max_n_iter=500):
+
+#     print "Importing Data..."
+#     X = import_file(inX)
+
+#     print "Performing Dimension Reduction to %d components..." % n_dim
+#     rX = TruncatedSVD(n_dim).fit_transform(X)
+
+#     loglikelihood = 1
+#     final_model = DPGMM()
+
+#     for i in range(n_trials):
+#         print "Restart #%d" % i
+
+#         new_gmm = train_DPGMM(rX, max_n_comp, max_n_iter)
+#         new_likelihood = data_log_likelihood(new_gmm, rX)
+#         print "Likelihood: %f" % new_likelihood
+
+#         new_model_is_better = (
+#             new_likelihood > loglikelihood or 
+#             loglikelihood == 1 # No current model
+#             )
+
+#         if new_model_is_better:
+#             loglikelihood = new_likelihood
+#             final_model = new_gmm
+
+#     probs = final_model.predict_proba(rX)
+
+#     return final_model, probs
+
+def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1):
+
+    print 'Importing Data...'
+    X = import_file(inX)
+
+    print 'Performing svd to %d components...' % (num_components)
+    rX = TruncatedSVD(num_components).fit_transform(X)
+
+    if num_data_points > 0:
+        rX = rX[:num_data_points,:]
+
+    gmm = GMM(num_components, n_iter=1000, n_init=num_trials)
+
+    print "Training GMM (%d initializations)..." % (num_trials)
+    start = timeit.default_timer()
+    gmm.fit(rX)
+    end = timeit.default_timer()
+    print "Training completed in %f seconds" % (end-start)
+
+    print "Forming predictions..."
+    start = timeit.default_timer()
+    gmm.predict_proba(rX)
+    end = timeit.default_timer()
+    print "Prediction completed in %f seconds" % (end-start)
+
+    return gmm, probs
+
+def train_spectral_GMM(num_components=2, num_trials=1, num_data_points=-1):
 
     print "Importing Data..."
     X = import_file(inX)
 
-    print "Performing Dimension Reduction to %d components..." % n_dim
-    rX = TruncatedSVD(n_dim).fit_transform(X)
+    print "Forming Graph Laplacian..."
+    L = make_graph_laplacian(X)
 
-    loglikelihood = 1
-    final_model = DPGMM()
+    print "Performing svd to %d components..." % (num_components)
+    svd = TruncatedSVD(num_components)
+    svd.fit(L)
+    components = svd.components_.transpose()
+    print components.shape
 
-    for i in range(n_trials):
-        print "Restart #%d" % i
+    if num_data_points > 0:
+        components = components[:num_data_points,:]
 
-        new_gmm = train_DPGMM(rX, max_n_comp, max_n_iter)
-        new_likelihood = data_log_likelihood(new_gmm, rX)
-        print "Likelihood: %f" % new_likelihood
+    gmm = GMM(num_components, n_iter=1000, n_init=num_trials)
 
-        new_model_is_better = (
-            new_likelihood > loglikelihood or 
-            loglikelihood == 1 # No current model
-            )
+    print "Training GMM (%d initializations)..." % num_trials
+    start = timeit.default_timer()
+    gmm.fit(components)
+    end = timeit.default_timer()
 
-        if new_model_is_better:
-            loglikelihood = new_likelihood
-            final_model = new_gmm
+    print "Fitting completed in %f seconds" % (end-start)
+    print "Converged = "
+    print gmm.converged_
 
-    probs = final_model.predict_proba(rX)
+    print "Forming predictions..."
+    start = timeit.default_timer()
+    probs = gmm.predict_proba(components)
+    end = timeit.default_timer()
+    print "Prediction completed in %f seconds" % (end - start)
 
-    return final_model, probs
+    return gmm, probs, components
 
 def train_DPGMM(d, max_n_comp=100, max_n_iter=500):
     '''Imports Data, Trains a DPGMM, Generates predictions testing'''
@@ -264,11 +298,13 @@ def train_DPGMM(d, max_n_comp=100, max_n_iter=500):
 
 def GMM_prediction_probs_max(probs):
 
+    print "Importing Data..."
     Y = import_file(inY)
     [r, c, d] = sparse.find(Y)
 
     preds = []
 
+    print "Forming predictions..."
     for i in range(len(r)):
 
         sender = r[i]
@@ -283,12 +319,36 @@ def GMM_prediction_probs_max(probs):
         preds.append({
             "ids":(sender, receiver),
             "probability": final_prob})
-    writeFileArray(preds, "GPMM_preds.csv")
+        
+    print "Saving predictions..."
+    writeFileArray(preds, outname)
 
-def run_DPGMM(n_trials=5):
-    gmm, probs = multiple_trial_DPGMM(n_trials)
-    joblib.dump(gmm, "DPGMM")
-    generate_GMM_prediction_probs(probs)
+def GMM_prediction_probs_dot(probs):
+
+    print "Importing Data..."
+    Y = import_file(inY)
+    [r, c, d] = sparse.find(Y)
+
+    preds = []
+
+    print "Forming predictions..."
+    for i in range(len(r)):
+
+        sender = r[i]
+        receiver = c[i]
+
+        all_comp_probs = np.multiply(
+            probs[sender, :],
+            probs[receiver, :]
+            )
+
+    final_prob = np.sum(all_comp_probs)
+    preds.append({
+        "ids": (sender, receiver)
+        "probability": final_prob
+        })
+    print "Saving predictions..."
+    writeFileArray(preds, outname)
 
 def isomap_data(symmetric=True, num_data_points=-1):
 
