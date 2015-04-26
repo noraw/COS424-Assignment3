@@ -192,6 +192,25 @@ def plot_roc_curve(probs):
     plt.plot(fpr, tpr)
     plt.show()
 
+def augment_with_negative_data(positive_senders, positive_receivers, num_ids):
+
+    positive_coords = zip(positive_senders, positive_receivers)
+
+    num_positive_coords = len(positive_coords)
+
+    negative_coords = []
+    while len(negative_coords) < num_positive_coords:
+        sender = random.randint(0,num_ids)
+        receiver = random.randint(0,num_ids)
+
+        if (sender, receiver) not in positive_coords:
+            negative_coords.append((sender, receiver))
+
+    negative_senders, negative_receivers = zip(*negative_coords)
+
+
+
+
 # ********************************************
 # ********************************************
 # Training and Prediction Functions
@@ -371,6 +390,16 @@ def GMM_prediction_probs_dot(probs, save=True):
         writeFileArray(preds, outname)
 
     return np.array([elem['probability'] for elem in preds])
+
+def train_degree_logistic_regression():
+
+    X = import_file(inX, symmetric=False, normalize=False)
+    [r, c, d] = readInputFile
+
+    sender_degree = X.sum(1)
+    receiver_degree = X.sum(0)
+
+
 
 # ********************************************
 # ********************************************

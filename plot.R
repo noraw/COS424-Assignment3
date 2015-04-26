@@ -82,4 +82,9 @@ rocdata <- function(grp, pred){
 }
 
 #SVD
-svd_probs <- read.table 
+svd_probs <- read.csv('SVD_probs.csv')
+svd_roc <- rocdata(svd_probs$TestValue, svd_probs$Probability)
+ggplot(svd_roc$roc, aes(x=x,y=y)) +
+  geom_line(colour='blue') +
+  geom_abline(intercept=0, slope=1) +
+  theme_bw()
