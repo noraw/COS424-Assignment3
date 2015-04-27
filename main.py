@@ -6,14 +6,14 @@
 #
 # ********************************************
 import numpy as np
-import argparse
-import os
+import argparse, os, random
 import matplotlib.pyplot as plt
 from sklearn import metrics
 from sklearn import linear_model
 from sklearn.pipeline import Pipeline
 from sklearn.decomposition import TruncatedSVD
 from sklearn.mixture import GMM, DPGMM
+from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import scale
 from sklearn.manifold import Isomap
 from scipy import sparse
@@ -27,6 +27,7 @@ from sklearn.externals import joblib
 #Constants 
 inX = "txTripletsCounts.txt"
 inY = "testTriplets.txt"
+inNeg = "negative_data.txt"
 
 size = 444075
 # ********************************************
@@ -197,7 +198,7 @@ def plot_roc_curve(probs):
     plt.plot(fpr, tpr)
     plt.show()
 
-def augment_with_negative_data(positive_senders, positive_receivers, num_ids):
+def augment_with_negative_data(positive_senders, positive_receivers, values, num_ids):
 
     positive_coords = zip(positive_senders, positive_receivers)
 
@@ -205,16 +206,56 @@ def augment_with_negative_data(positive_senders, positive_receivers, num_ids):
 
     negative_coords = []
     while len(negative_coords) < num_positive_coords:
-        sender = random.randint(0,num_ids)
-        receiver = random.randint(0,num_ids)
+        sender = random.randint(0,num_ids-1)
+        receiver = random.randint(0,num_ids-1)
 
-        if (sender, receiver) not in positive_coords:
-            negative_coords.append((sender, receiver))
+        # if (sender, receiver) not in positive_coords:
+        negative_coords.append((sender, receiver))
+        print len(negative_coords)
 
     negative_senders, negative_receivers = zip(*negative_coords)
 
+    all_senders = np.hstack((positive_senders,negative_senders))
+    all_receivers = np.hstack((positive_receivers,negative_receivers))
+    all_values = np.hstack((values,[0 for elem in negative_senders]))
 
+    return all_senders, all_receivers, all_values
 
+def number_of_common_neighbors(Xsym, sender, receiver):
+    '''Takes the symmetric version of the matrix, and
+    returns the number of common neighbors for a given
+    sender/receiver pair'''
+
+    sender_neighbors = Xsym[sender,:].toarray()
+    receiver_neighbors = Xsym[receiver,:].toarray()
+
+    common_neighbors = np.multiply(
+        sender_neighbors,
+        receiver_neighbors)
+
+    #binarizing
+    common_neighbors[common_neighbors != 0] = 1
+
+    return np.sum(common_neighbors)
+
+def transform_to_degree_data(X, r, c):
+
+    sender_degree = X.sum(1).flatten().transpose()
+    receiver_degree = X.sum(0).flatten().transpose()
+
+    r_res = []
+    c_res = []
+    for i in range(len(r)):
+
+        r_res.append(
+            sender_degree[r[i],0])
+        c_res.append(
+            receiver_degree[c[i],0])
+
+    #formatting as a list
+    r_res = np.array(r_res).transpose().tolist()
+    c_res = np.array(c_res).transpose().tolist()
+    return r_res, c_res
 
 # ********************************************
 # ********************************************
@@ -419,13 +460,49 @@ def GMM_prediction_probs_dot(probs, save=True):
 
 def train_degree_logistic_regression():
 
+    print "Importing Data..."
     X = import_file(inX, symmetric=False, normalize=False)
-    [r, c, d] = readInputFile
+    Xs = import_file(inX, symmetric=True, normalize=False)
+    #p for positive cases, n for negative cases
+    [rp, cp, dp] = readInputFile(inX)
+    [rn, cn, dn] = readInputFile(inNeg)
 
-    sender_degree = X.sum(1)
-    receiver_degree = X.sum(0)
+    r = np.hstack((rp, rn))
+    c = np.hstack((cp, cn))
+    d = np.hstack((dp, dn))
 
+    print "Transforming Data to degree..."
+    [r, c] = transform_to_degree_data(Xs, r, c)
+    x = np.vstack((r, c)).transpose()
 
+    lr = LogisticRegression()
+
+    print "Training Logistic Regression Model..."
+    timeit.default_timer()
+    lr.fit(x, d)
+    timeit.default_timer()
+
+    print "Training completed in %f seconds" % (end-start)
+
+    return lr
+
+def predict_degree_logistic_regression(lr):
+
+    print "Importing Data..."
+    Ys = m.import_file(inY, symmetric=True, normalize=False)
+    [r, c, d] = m.readInputFile(inY)
+
+    [r, c] = transform_to_degree_data(Ys, r, c)
+    x_test = np.vstack((r,c)).transpose()
+
+    print "Performing Prediction..."
+    start = timeit.default_timer()
+    probs = lr.predict(x_test)
+    end = timeit.default_timer()
+
+    print "Prediction completed in %f seconds" % (end-start)
+
+    return probs
 
 # ********************************************
 # ********************************************
@@ -479,39 +556,3 @@ if __name__ == '__main__':
 
 
 
-# ********************************************
-# ********************************************
-# Temporary Junk
-
-
-# # I'm pretty sure that this is a bad idea now
-# def multiple_trial_DPGMM(n_trials=5, n_dim=15, max_n_comp=500, max_n_iter=500):
-
-#     print "Importing Data..."
-#     X = import_file(inX)
-
-#     print "Performing Dimension Reduction to %d components..." % n_dim
-#     rX = TruncatedSVD(n_dim).fit_transform(X)
-
-#     loglikelihood = 1
-#     final_model = DPGMM()
-
-#     for i in range(n_trials):
-#         print "Restart #%d" % i
-
-#         new_gmm = train_DPGMM(rX, max_n_comp, max_n_iter)
-#         new_likelihood = data_log_likelihood(new_gmm, rX)
-#         print "Likelihood: %f" % new_likelihood
-
-#         new_model_is_better = (
-#             new_likelihood > loglikelihood or 
-#             loglikelihood == 1 # No current model
-#             )
-
-#         if new_model_is_better:
-#             loglikelihood = new_likelihood
-#             final_model = new_gmm
-
-#     probs = final_model.predict_proba(rX)
-
-#     return final_model, probs
