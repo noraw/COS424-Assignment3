@@ -13,6 +13,7 @@ from sklearn import linear_model
 from sklearn.pipeline import Pipeline
 from sklearn.decomposition import TruncatedSVD
 from sklearn.mixture import GMM, DPGMM
+from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import scale
 from sklearn.manifold import Isomap
 from scipy import sparse
@@ -433,18 +434,49 @@ def GMM_prediction_probs_dot(probs, save=True):
 
 def train_degree_logistic_regression():
 
+    print "Importing Data..."
     X = import_file(inX, symmetric=False, normalize=False)
     Xs = import_file(inX, symmetric=True, normalize=False)
     #p for positive cases, n for negative cases
     [rp, cp, dp] = readInputFile(inX)
     [rn, cn, dn] = readInputFile(inNeg)
 
-    r = np.hstack(rp, rn)
-    c = np.hstack(cp, cn)
-    d = np.hstack(dp, dn)
+    r = np.hstack((rp, rn))
+    c = np.hstack((cp, cn))
+    d = np.hstack((dp, dn))
 
-    [r, c] = transform_to_degree_data(Xsym, r, c)
+    print "Transforming Data to degree..."
+    [r, c] = transform_to_degree_data(Xs, r, c)
+    x = np.vstack((r, c)).transpose()
 
+    lr = LogisticRegression()
+
+    print "Training Logistic Regression Model..."
+    timeit.default_timer()
+    lr.fit(x, d)
+    timeit.default_timer()
+
+    print "Training completed in %f seconds" % (end-start)
+
+    return lr
+
+def predict_degree_logistic_regression(lr):
+
+    print "Importing Data..."
+    Ys = m.import_file(inY, symmetric=True, normalize=False)
+    [r, c, d] = m.readInputFile(inY)
+
+    [r, c] = transform_to_degree_data(Ys, r, c)
+    x_test = np.vstack((r,c)).transpose()
+
+    print "Performing Prediction..."
+    start = timeit.default_timer()
+    probs = lr.predict(x_test)
+    end = timeit.default_timer()
+
+    print "Prediction completed in %f seconds" % (end-start)
+
+    return probs
 
 # ********************************************
 # ********************************************
