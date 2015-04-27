@@ -199,8 +199,8 @@ def augment_with_negative_data(positive_senders, positive_receivers, values, num
 
     negative_coords = []
     while len(negative_coords) < num_positive_coords:
-        sender = random.randint(0,num_ids)
-        receiver = random.randint(0,num_ids)
+        sender = random.randint(0,num_ids-1)
+        receiver = random.randint(0,num_ids-1)
 
         if (sender, receiver) not in positive_coords:
             negative_coords.append((sender, receiver))
@@ -208,9 +208,10 @@ def augment_with_negative_data(positive_senders, positive_receivers, values, num
 
     negative_senders, negative_receivers = zip(*negative_coords)
 
-    all_senders = positive_senders + negative_senders
-    all_receivers = positive_receivers + negative_receivers
-    all_values = values + [0 for elem in negative_senders]
+    print negative_senders
+    all_senders = np.hstack((positive_senders,negative_senders))
+    all_receivers = np.hstack((positive_receivers,negative_receivers))
+    all_values = np.hstack((values,[0 for elem in negative_senders]))
 
     return all_senders, all_receivers, all_values
 
@@ -219,10 +220,17 @@ def number_of_common_neighbors(Xsym, sender, receiver):
     returns the number of common neighbors for a given
     sender/receiver pair'''
 
-    sender_neighbors = Xsym[sender,:]
-    receiver_neighbors = Xsym[receiver,:]
+    sender_neighbors = Xsym[sender,:].toarray()
+    receiver_neighbors = Xsym[receiver,:].toarray()
 
+    common_neighbors = np.multiply(
+        sender_neighbors,
+        receiver_neighbors)
 
+    #binarizing
+    common_neighbors[common_neighbors != 0] = 1
+
+    return np.sum(common_neighbors)
 
 # ********************************************
 # ********************************************
