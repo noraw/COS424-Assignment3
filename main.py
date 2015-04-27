@@ -113,11 +113,17 @@ def createSymmetricMatrix(row, column, data):
 
     return createMatrix(newRow, newCol, newData)
 
-def import_file(filename, symmetric = True, normalize = True):
+def import_file(filename, symmetric = True, normalize = True, log=False, binary=False):
     '''Reads in an input file, returns the sparse matrix'''
 
     # print "Importing..." #Debug output
     [r, c, d] = readInputFile(filename)
+
+    if log:
+        d = np.log10(d)
+
+    if binary:
+        d = [1 for elem in d]
 
     # print "Creating Matrix..."
     if symmetric:
@@ -316,7 +322,7 @@ def runSVD(clf, X, rowY, dataY, columnY, outname):
 def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1):
 
     print 'Importing Data...'
-    X = import_file(inX, symmetric=False, normalize=False)
+    X = import_file(inX, binary=True, symmetric=False, normalize=False)
 
     print 'Performing svd to %d components...' % (num_components)
     u, s, vt = svds(X,num_components)
@@ -348,7 +354,7 @@ def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1):
 def train_spectral_GMM(num_components=2, num_trials=1, num_data_points=-1):
 
     print "Importing Data..."
-    X = import_file(inX, symmetric=False, normalize=False)
+    X = import_file(inX, binary=True, symmetric=False, normalize=False)
 
     print "Forming Graph Laplacian..."
     L = make_graph_laplacian(X)
