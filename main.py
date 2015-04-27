@@ -64,12 +64,17 @@ def readInputFile(inFileName):
     data = []
     inFile = open(inFileName)
     lines = inFile.readlines()
+    total = 0
     for i in range(len(lines)):
         numbers = lines[i].split()
         row.append(int(numbers[0]))
         column.append(int(numbers[1]))
         data.append(int(numbers[2]))
+        total += int(numbers[2])
 
+    average = total/len(lines)
+    #print inFileName
+    #print "Average interactions: " + str(average)
     return [row, column, data]
 
 def createMatrix(row, column, data):
@@ -223,10 +228,14 @@ def predictSVD(clf, X, row, column):
     print "   runtime: " + str(stop - start)
     u = clf.components_ 
     d = clf.explained_variance_
+    print "d:"
+    print d
 
     matrixY = clf.components_ 
     probsY = []
+    print "dot products:"
     for i in range(len(row)):
+        print np.dot(u[:,column[i]], v[row[i],:])
         prob = np.sum(np.dot(u[:,column[i]], v[row[i],:]) * d)
         if(prob < 0): prob = 0
         if(prob > 1): prob = 1
@@ -245,6 +254,23 @@ def testSVD(clf, X, row, column, outname):
     for i in range(len(ratio)):
         ratioDict.append({"Value":i, "Ratio":ratio[i]})
     writeFileArray(ratioDict, "%s_ratio.csv" % outname)
+
+def runSVD(clf, X, rowY, dataY, columnY, outname):
+    probsY = predictSVD(clf, X, rowY, columnY)
+
+    probsDict = []
+    for i in range(len(probsY)):
+        probsDict.append({"TestValue":dataY[i], "Probability":probsY[i]})
+
+    fpr, tpr, thresholds = metrics.roc_curve(probsY, dataY, pos_label=1)
+    print "Num fpr, tpr: %i, %i" % (len(fpr), len(tpr))
+    rocDict = []
+    for i in range(len(fpr)):
+        rocDict.append({"fpr":fpr[i], "tpr":tpr[i]})
+
+    writeFileArray(rocDict, "%s_roc.csv" % outname)
+    writeFileArray(probsDict, "%s_probs.csv" % outname)
+
 
 def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1):
 
@@ -437,8 +463,8 @@ if __name__ == '__main__':
         outname = "SVD"
         clf = TruncatedSVD(n_components=90)
         #testSVD(clf, X, rowY, columnY, outname)
-        probsY = predictSVD(clf, X, rowY, columnY)
-
+        runSVD(clf, X, rowY, dataY, columnY, outname)
+        runSVD(clf, symX, rowY, dataY, columnY, outname+"_sym")
 
     if args.Factorization:
         print "Factorization"
@@ -451,18 +477,6 @@ if __name__ == '__main__':
         clf = linear_model.RANSACRegressor(linear_model.LinearRegression())
 
 
-    if ((args.SVD or args.Factorization or args.Mixature) and probsY != None):
-        probsDict = []
-        for i in range(len(probsY)):
-            probsDict.append({"TestValue":dataY[i], "Probability":probsY[i]})
-
-        fpr, tpr, thresholds = metrics.roc_curve(probsY, dataY, pos_label=1)
-        rocDict = []
-        for i in range(len(fpr)):
-            rocDict.append({"fpr":fpr[i], "tpr":tpr[i]})
-
-        writeFileArray(rocDict, "%s_roc.csv" % outname)
-        writeFileArray(probsDict, "%s_probs.csv" % outname)
 
 
 # ********************************************
