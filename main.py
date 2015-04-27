@@ -13,6 +13,7 @@ from sklearn import linear_model
 from sklearn.pipeline import Pipeline
 from sklearn.decomposition import TruncatedSVD
 from sklearn.mixture import GMM, DPGMM
+from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import scale
 from sklearn.manifold import Isomap
 from scipy import sparse
@@ -64,12 +65,17 @@ def readInputFile(inFileName):
     data = []
     inFile = open(inFileName)
     lines = inFile.readlines()
+    total = 0
     for i in range(len(lines)):
         numbers = lines[i].split()
         row.append(int(numbers[0]))
         column.append(int(numbers[1]))
         data.append(int(numbers[2]))
+        total += int(numbers[2])
 
+    average = total/len(lines)
+    #print inFileName
+    #print "Average interactions: " + str(average)
     return [row, column, data]
 
 def createMatrix(row, column, data):
@@ -263,10 +269,14 @@ def predictSVD(clf, X, row, column):
     print "   runtime: " + str(stop - start)
     u = clf.components_ 
     d = clf.explained_variance_
+    print "d:"
+    print d
 
     matrixY = clf.components_ 
     probsY = []
+    print "dot products:"
     for i in range(len(row)):
+        print np.dot(u[:,column[i]], v[row[i],:])
         prob = np.sum(np.dot(u[:,column[i]], v[row[i],:]) * d)
         if(prob < 0): prob = 0
         if(prob > 1): prob = 1
@@ -285,6 +295,23 @@ def testSVD(clf, X, row, column, outname):
     for i in range(len(ratio)):
         ratioDict.append({"Value":i, "Ratio":ratio[i]})
     writeFileArray(ratioDict, "%s_ratio.csv" % outname)
+
+def runSVD(clf, X, rowY, dataY, columnY, outname):
+    probsY = predictSVD(clf, X, rowY, columnY)
+
+    probsDict = []
+    for i in range(len(probsY)):
+        probsDict.append({"TestValue":dataY[i], "Probability":probsY[i]})
+
+    fpr, tpr, thresholds = metrics.roc_curve(probsY, dataY, pos_label=1)
+    print "Num fpr, tpr: %i, %i" % (len(fpr), len(tpr))
+    rocDict = []
+    for i in range(len(fpr)):
+        rocDict.append({"fpr":fpr[i], "tpr":tpr[i]})
+
+    writeFileArray(rocDict, "%s_roc.csv" % outname)
+    writeFileArray(probsDict, "%s_probs.csv" % outname)
+
 
 def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1):
 
@@ -433,18 +460,49 @@ def GMM_prediction_probs_dot(probs, save=True):
 
 def train_degree_logistic_regression():
 
+    print "Importing Data..."
     X = import_file(inX, symmetric=False, normalize=False)
     Xs = import_file(inX, symmetric=True, normalize=False)
     #p for positive cases, n for negative cases
     [rp, cp, dp] = readInputFile(inX)
     [rn, cn, dn] = readInputFile(inNeg)
 
-    r = np.hstack(rp, rn)
-    c = np.hstack(cp, cn)
-    d = np.hstack(dp, dn)
+    r = np.hstack((rp, rn))
+    c = np.hstack((cp, cn))
+    d = np.hstack((dp, dn))
 
-    [r, c] = transform_to_degree_data(Xsym, r, c)
+    print "Transforming Data to degree..."
+    [r, c] = transform_to_degree_data(Xs, r, c)
+    x = np.vstack((r, c)).transpose()
 
+    lr = LogisticRegression()
+
+    print "Training Logistic Regression Model..."
+    timeit.default_timer()
+    lr.fit(x, d)
+    timeit.default_timer()
+
+    print "Training completed in %f seconds" % (end-start)
+
+    return lr
+
+def predict_degree_logistic_regression(lr):
+
+    print "Importing Data..."
+    Ys = m.import_file(inY, symmetric=True, normalize=False)
+    [r, c, d] = m.readInputFile(inY)
+
+    [r, c] = transform_to_degree_data(Ys, r, c)
+    x_test = np.vstack((r,c)).transpose()
+
+    print "Performing Prediction..."
+    start = timeit.default_timer()
+    probs = lr.predict(x_test)
+    end = timeit.default_timer()
+
+    print "Prediction completed in %f seconds" % (end-start)
+
+    return probs
 
 # ********************************************
 # ********************************************
@@ -482,8 +540,8 @@ if __name__ == '__main__':
         outname = "SVD"
         clf = TruncatedSVD(n_components=90)
         #testSVD(clf, X, rowY, columnY, outname)
-        probsY = predictSVD(clf, X, rowY, columnY)
-
+        runSVD(clf, X, rowY, dataY, columnY, outname)
+        runSVD(clf, symX, rowY, dataY, columnY, outname+"_sym")
 
     if args.Factorization:
         print "Factorization"
@@ -496,17 +554,5 @@ if __name__ == '__main__':
         clf = linear_model.RANSACRegressor(linear_model.LinearRegression())
 
 
-    if ((args.SVD or args.Factorization or args.Mixature) and probsY != None):
-        probsDict = []
-        for i in range(len(probsY)):
-            probsDict.append({"TestValue":dataY[i], "Probability":probsY[i]})
-
-        fpr, tpr, thresholds = metrics.roc_curve(probsY, dataY, pos_label=1)
-        rocDict = []
-        for i in range(len(fpr)):
-            rocDict.append({"fpr":fpr[i], "tpr":tpr[i]})
-
-        writeFileArray(rocDict, "%s_roc.csv" % outname)
-        writeFileArray(probsDict, "%s_probs.csv" % outname)
 
 
