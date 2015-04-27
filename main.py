@@ -6,8 +6,7 @@
 #
 # ********************************************
 import numpy as np
-import argparse
-import os
+import argparse, os, random
 import matplotlib.pyplot as plt
 from sklearn import metrics
 from sklearn import linear_model
@@ -192,7 +191,7 @@ def plot_roc_curve(probs):
     plt.plot(fpr, tpr)
     plt.show()
 
-def augment_with_negative_data(positive_senders, positive_receivers, num_ids):
+def augment_with_negative_data(positive_senders, positive_receivers, values, num_ids):
 
     positive_coords = zip(positive_senders, positive_receivers)
 
@@ -205,9 +204,23 @@ def augment_with_negative_data(positive_senders, positive_receivers, num_ids):
 
         if (sender, receiver) not in positive_coords:
             negative_coords.append((sender, receiver))
+            print len(negative_coords)
 
     negative_senders, negative_receivers = zip(*negative_coords)
 
+    all_senders = positive_senders + negative_senders
+    all_receivers = positive_receivers + negative_receivers
+    all_values = values + [0 for elem in negative_senders]
+
+    return all_senders, all_receivers, all_values
+
+def number_of_common_neighbors(Xsym, sender, receiver):
+    '''Takes the symmetric version of the matrix, and
+    returns the number of common neighbors for a given
+    sender/receiver pair'''
+
+    sender_neighbors = Xsym[sender,:]
+    receiver_neighbors = Xsym[receiver,:]
 
 
 
@@ -400,7 +413,6 @@ def train_degree_logistic_regression():
     receiver_degree = X.sum(0)
 
 
-
 # ********************************************
 # ********************************************
 # Command-Line Functionality
@@ -465,39 +477,3 @@ if __name__ == '__main__':
         writeFileArray(probsDict, "%s_probs.csv" % outname)
 
 
-# ********************************************
-# ********************************************
-# Temporary Junk
-
-
-# # I'm pretty sure that this is a bad idea now
-# def multiple_trial_DPGMM(n_trials=5, n_dim=15, max_n_comp=500, max_n_iter=500):
-
-#     print "Importing Data..."
-#     X = import_file(inX)
-
-#     print "Performing Dimension Reduction to %d components..." % n_dim
-#     rX = TruncatedSVD(n_dim).fit_transform(X)
-
-#     loglikelihood = 1
-#     final_model = DPGMM()
-
-#     for i in range(n_trials):
-#         print "Restart #%d" % i
-
-#         new_gmm = train_DPGMM(rX, max_n_comp, max_n_iter)
-#         new_likelihood = data_log_likelihood(new_gmm, rX)
-#         print "Likelihood: %f" % new_likelihood
-
-#         new_model_is_better = (
-#             new_likelihood > loglikelihood or 
-#             loglikelihood == 1 # No current model
-#             )
-
-#         if new_model_is_better:
-#             loglikelihood = new_likelihood
-#             final_model = new_gmm
-
-#     probs = final_model.predict_proba(rX)
-
-#     return final_model, probs
