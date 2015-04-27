@@ -229,7 +229,7 @@ def number_of_common_neighbors(Xsym, sender, receiver):
     sender_neighbors = Xsym[sender,:].toarray()
     receiver_neighbors = Xsym[receiver,:].toarray()
 
-    common_neighbors = np.multiply(
+    common_neighbors = np.minimum(
         sender_neighbors,
         receiver_neighbors)
 
