@@ -26,6 +26,7 @@ from sklearn.externals import joblib
 #Constants 
 inX = "txTripletsCounts.txt"
 inY = "testTriplets.txt"
+inNeg = "negative_data.txt"
 
 size = 444075
 # ********************************************
@@ -202,13 +203,12 @@ def augment_with_negative_data(positive_senders, positive_receivers, values, num
         sender = random.randint(0,num_ids-1)
         receiver = random.randint(0,num_ids-1)
 
-        if (sender, receiver) not in positive_coords:
-            negative_coords.append((sender, receiver))
-            print len(negative_coords)
+        # if (sender, receiver) not in positive_coords:
+        negative_coords.append((sender, receiver))
+        print len(negative_coords)
 
     negative_senders, negative_receivers = zip(*negative_coords)
 
-    print negative_senders
     all_senders = np.hstack((positive_senders,negative_senders))
     all_receivers = np.hstack((positive_receivers,negative_receivers))
     all_values = np.hstack((values,[0 for elem in negative_senders]))
@@ -231,6 +231,25 @@ def number_of_common_neighbors(Xsym, sender, receiver):
     common_neighbors[common_neighbors != 0] = 1
 
     return np.sum(common_neighbors)
+
+def transform_to_degree_data(X, r, c):
+
+    sender_degree = X.sum(1).flatten().transpose()
+    receiver_degree = X.sum(0).flatten().transpose()
+
+    r_res = []
+    c_res = []
+    for i in range(len(r)):
+
+        r_res.append(
+            sender_degree[r[i],0])
+        c_res.append(
+            receiver_degree[c[i],0])
+
+    #formatting as a list
+    r_res = np.array(r_res).transpose().tolist()
+    c_res = np.array(c_res).transpose().tolist()
+    return r_res, c_res
 
 # ********************************************
 # ********************************************
@@ -415,10 +434,16 @@ def GMM_prediction_probs_dot(probs, save=True):
 def train_degree_logistic_regression():
 
     X = import_file(inX, symmetric=False, normalize=False)
-    [r, c, d] = readInputFile
+    Xs = import_file(inX, symmetric=True, normalize=False)
+    #p for positive cases, n for negative cases
+    [rp, cp, dp] = readInputFile(inX)
+    [rn, cn, dn] = readInputFile(inNeg)
 
-    sender_degree = X.sum(1)
-    receiver_degree = X.sum(0)
+    r = np.hstack(rp, rn)
+    c = np.hstack(cp, cn)
+    d = np.hstack(dp, dn)
+
+    [r, c] = transform_to_degree_data(Xsym, r, c)
 
 
 # ********************************************
