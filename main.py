@@ -276,7 +276,7 @@ def save_probs_as_tprfpr(probs, outname):
     print "Area Under Curve: "
     print auc(fpr, tpr)
 
-    save_csv(np.vstack().transpose())
+    save_csv(np.vstack((fpr, tpr)).transpose())
 
 def save_csv(array, outname):
 
