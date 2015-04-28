@@ -244,6 +244,10 @@ def number_of_common_neighbors(Xsym, sender, receiver):
 
     return np.sum(common_neighbors)
 
+def num_neighbors_column(Xsym, r, c):
+    return [number_of_common_neighbors(Xsym, r[i], c[i])
+        for i in range(len(r))]
+
 def transform_to_degree_data(X, r, c):
 
     sender_degree = X.sum(1).flatten().transpose()
@@ -464,7 +468,7 @@ def GMM_prediction_probs_dot(probs, save=True):
 
     return np.array([elem['probability'] for elem in preds])
 
-def train_degree_logistic_regression():
+def train_degree_logistic_regression(num_data_points=20000, neighbors=False):
 
     print "Importing Data..."
     X = import_file(inX, symmetric=False, normalize=False)
@@ -473,33 +477,63 @@ def train_degree_logistic_regression():
     [rp, cp, dp] = readInputFile(inX)
     [rn, cn, dn] = readInputFile(inNeg)
 
-    r = np.hstack((rp, rn))
-    c = np.hstack((cp, cn))
-    d = np.hstack((dp, dn))
+    num_points_per_category = num_data_points / 2
+
+    print "Sampling positive and negative trials"
+    positive_samples = np.vstack((rp, cp, dp))
+    negative_samples = np.vstack((rn, cn, dn))
+
+    indices = np.array(range(len(rp)))
+
+    positive_sample = positive_samples[:,
+            np.random.choice(indices, num_points_per_category, False)]
+    negative_sample = negative_samples[:,
+            np.random.choice(indices, num_points_per_category, False)]
+
+    both_samples = np.hstack((positive_sample, negative_sample))
+    r = both_samples[0,:]
+    c = both_samples[1,:]
+    d = both_samples[2,:]
+
+    if neighbors:
+        print "Finding common neighbors"
+        n = num_neighbors_column(Xs, r, c)
 
     print "Transforming Data to degree..."
     [r, c] = transform_to_degree_data(Xs, r, c)
-    x = np.vstack((r, c)).transpose()
+
+    if neighbors:
+        x = np.vstack((r, c, n)).transpose()
+    else:
+        x = np.vstack((r, c)).transpose()
 
     lr = LogisticRegression()
 
     print "Training Logistic Regression Model..."
-    timeit.default_timer()
+    start = timeit.default_timer()
     lr.fit(x, d)
-    timeit.default_timer()
+    end = timeit.default_timer()
 
     print "Training completed in %f seconds" % (end-start)
 
     return lr
 
-def predict_degree_logistic_regression(lr):
+def predict_degree_logistic_regression(lr, neighbors=False):
 
     print "Importing Data..."
-    Ys = m.import_file(inY, symmetric=True, normalize=False)
-    [r, c, d] = m.readInputFile(inY)
+    Ys = import_file(inY, symmetric=True, normalize=False)
+    Xs = import_file(inY, symmetric=True, normalize=False)
+    [r, c, d] = readInputFile(inY)
+
+    if neighbors:
+        n = num_neighbors_column(Xs, r, c)
 
     [r, c] = transform_to_degree_data(Ys, r, c)
-    x_test = np.vstack((r,c)).transpose()
+
+    if neighbors:
+        x_test = np.vstack((r, c, n)).transpose()
+    else:
+        x_test = np.vstack((r,c)).transpose()
 
     print "Performing Prediction..."
     start = timeit.default_timer()
