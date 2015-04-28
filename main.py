@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from sklearn import metrics
 from sklearn import linear_model
 from sklearn.pipeline import Pipeline
-from sklearn.decomposition import TruncatedSVD
+from sklearn.decomposition import TruncatedSVD, NMF
 from sklearn.mixture import GMM, DPGMM
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import scale
@@ -21,7 +21,6 @@ from scipy.sparse.linalg import svds
 import timeit
 from math import sqrt
 from sklearn.metrics import roc_curve, auc
-from sklearn.externals import joblib
 
 # ********************************************
 #Constants 
@@ -122,14 +121,14 @@ def import_file(filename, symmetric = True, normalize = True, log=False, binary=
     if log:
         d = np.log10(d)
 
-    if binary:
-        d = [1 for elem in d]
-
     # print "Creating Matrix..."
     if symmetric:
         res = createSymmetricMatrix(r, c, d)
     else:
         res = createMatrix(r, c, d)
+
+    if binary:
+        res[res != 0] = 1
 
     # print "Normalizing..."
     if normalize:
@@ -267,6 +266,29 @@ def transform_to_degree_data(X, r, c):
     c_res = np.array(c_res).transpose().tolist()
     return r_res, c_res
 
+def save_probs_as_tprfpr(probs, outname):
+
+    [r, c, d] = readInputFile(inY)
+    d = np.array(d)
+
+    fpr, tpr, _ = roc_curve(d, probs)
+
+    print "Area Under Curve: "
+    print auc(fpr, tpr)
+
+    save_csv(np.vstack().transpose())
+
+def save_csv(array, outname):
+
+    f = open(outname, 'w+')
+
+    num_rows = array.shape[0]
+    for i in range(num_rows):
+        f.write(','.join(map(str,array[i,:])))
+        f.write('\n')
+
+    f.close()
+
 # ********************************************
 # ********************************************
 # Training and Prediction Functions
@@ -322,11 +344,11 @@ def runSVD(clf, X, rowY, dataY, columnY, outname):
     writeFileArray(rocDict, "%s_roc.csv" % outname)
     writeFileArray(probsDict, "%s_probs.csv" % outname)
 
-
-def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1):
+def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1,
+    log=False, symmetric=False, normalize=False, binary=False):
 
     print 'Importing Data...'
-    X = import_file(inX, binary=True, symmetric=False, normalize=False)
+    X = import_file(inX, binary=binary, log=log, symmetric=symmetric, normalize=normalize)
 
     print 'Performing svd to %d components...' % (num_components)
     u, s, vt = svds(X,num_components)
@@ -335,8 +357,7 @@ def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1):
     if num_data_points > 0:
         rX = rX[:num_data_points,:]
 
-    gmm = GMM(num_components, covariance_type='spherical',
-        n_iter=1000, n_init=num_trials)
+    gmm = GMM(num_components, n_iter=1000, n_init=num_trials)
 
     print "Training GMM (%d initializations)..." % (num_trials)
     start = timeit.default_timer()
@@ -355,10 +376,11 @@ def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1):
 
     return gmm, probs
 
-def train_spectral_GMM(num_components=2, num_trials=1, num_data_points=-1):
+def train_spectral_GMM(num_components=2, num_trials=1, num_data_points=-1,
+    log=False, symmetric=False, normalize=False, binary=False):
 
     print "Importing Data..."
-    X = import_file(inX, binary=True, symmetric=False, normalize=False)
+    X = import_file(inX, binary=binary, log=log, symmetric=symmetric, normalize=normalize)
 
     print "Forming Graph Laplacian..."
     L = make_graph_laplacian(X)
@@ -370,8 +392,7 @@ def train_spectral_GMM(num_components=2, num_trials=1, num_data_points=-1):
     if num_data_points > 0:
         components = components[:num_data_points,:]
 
-    gmm = GMM(num_components, covariance_type='spherical', 
-        n_iter=1000, n_init=num_trials)
+    gmm = GMM(num_components, n_iter=1000, n_init=num_trials)
 
     print "Training GMM (%d initializations)..." % num_trials
     start = timeit.default_timer()
@@ -456,7 +477,10 @@ def GMM_prediction_probs_dot(probs, save=True):
             probs[receiver, :]
             )
 
-        final_prob = np.sum(all_comp_probs)
+        norm = (np.linalg.norm(probs[sender,:]) *
+                np.linalg.norm(probs[receiver,:]))
+
+        final_prob = np.sum(all_comp_probs) / norm
         preds.append({
             "ids": (sender, receiver),
             "probability": final_prob
@@ -468,7 +492,7 @@ def GMM_prediction_probs_dot(probs, save=True):
 
     return np.array([elem['probability'] for elem in preds])
 
-def train_degree_logistic_regression(num_data_points=20000, neighbors=False):
+def train_degree_logistic_regression(num_data_points=20000, neighbors=False, log=False):
 
     print "Importing Data..."
     X = import_file(inX, symmetric=False, normalize=False)
@@ -476,6 +500,9 @@ def train_degree_logistic_regression(num_data_points=20000, neighbors=False):
     #p for positive cases, n for negative cases
     [rp, cp, dp] = readInputFile(inX)
     [rn, cn, dn] = readInputFile(inNeg)
+
+    if log:
+        dp = np.log10(dp)
 
     num_points_per_category = num_data_points / 2
 
@@ -521,14 +548,13 @@ def train_degree_logistic_regression(num_data_points=20000, neighbors=False):
 def predict_degree_logistic_regression(lr, neighbors=False):
 
     print "Importing Data..."
-    Ys = import_file(inY, symmetric=True, normalize=False)
     Xs = import_file(inY, symmetric=True, normalize=False)
     [r, c, d] = readInputFile(inY)
 
     if neighbors:
         n = num_neighbors_column(Xs, r, c)
 
-    [r, c] = transform_to_degree_data(Ys, r, c)
+    [r, c] = transform_to_degree_data(Xs, r, c)
 
     if neighbors:
         x_test = np.vstack((r, c, n)).transpose()
@@ -543,6 +569,20 @@ def predict_degree_logistic_regression(lr, neighbors=False):
     print "Prediction completed in %f seconds" % (end-start)
 
     return probs
+
+def train_NMF(num_components=15):
+
+    print "Importing Data..."
+    Xs = import_file(inX, symmetric=False, normalize=False)
+
+    nmf = NMF(num_components, init='nndsvdar')
+    
+    print "Training Model..."
+    start = timeit.default_timer()
+    H = nmf.fit_transform(Xs)
+    end = timeit.default_timer()
+    print "Training completed in %f seconds" % (end-start)
+
 
 # ********************************************
 # ********************************************
