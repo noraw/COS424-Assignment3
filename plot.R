@@ -66,7 +66,7 @@ qplot(lbout_degree, geom='histogram')
 #Function for assembling together tpr/fpr data
 # (see datafile_mat structure below)
 assemble_roc_data <- function(file_mat){
-  
+  #Chance-level line
   tprfprs <- data.frame(
     'fpr'=c(0,1),
     'tpr'=c(0,1),
@@ -87,8 +87,10 @@ assemble_roc_data <- function(file_mat){
 #Constructing datafile_mat
 SVD_file = c('SVD_tprfpr.csv','SVD')
 GMM_file = c('head_against_wall.csv','GMM')
+LR_file = c('degree_60000.csv', 'Degree LogR')
+NDLR_file = c('degree_neighbor_logistic_regression.csv','Deg+Neighbor LogR')
 
-datafile_mat <- rbind(SVD_file, GMM_file)
+datafile_mat <- rbind(SVD_file, GMM_file, LR_file, NDLR_file)
 
 #Applying function
 roc_data <- assemble_roc_data(datafile_mat)

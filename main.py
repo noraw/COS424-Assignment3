@@ -276,7 +276,12 @@ def save_probs_as_tprfpr(probs, outname):
     print "Area Under Curve: "
     print auc(fpr, tpr)
 
-    save_csv(np.vstack((fpr, tpr)).transpose())
+    save_csv(np.vstack((fpr, tpr)).transpose(), outname)
+
+def save_probs(probs, outname):
+
+    [r, c, d] = readInputFile(inY)
+    save_csv(np.vstack((d, probs)).transpose(), outname)
 
 def save_csv(array, outname):
 
@@ -288,6 +293,20 @@ def save_csv(array, outname):
         f.write('\n')
 
     f.close()
+
+def filter_outliers(d, num_stds=10):
+
+    sample_median = np.median(d, 0)
+    sample_std = np.std(d, 0)
+
+    boundary = sample_median + (sample_std * num_stds)
+
+    index_outliers = np.any(d > boundary, 1)
+
+    new_d = d[np.logical_not(index_outliers), :]
+
+    return new_d, index_outliers
+
 
 # ********************************************
 # ********************************************
@@ -345,10 +364,10 @@ def runSVD(clf, X, rowY, dataY, columnY, outname):
     writeFileArray(probsDict, "%s_probs.csv" % outname)
 
 def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1,
-    log=False, symmetric=False, normalize=False, binary=False):
+    log=False, symmetric=False, binary=False, outlier_stds=-1):
 
     print 'Importing Data...'
-    X = import_file(inX, binary=binary, log=log, symmetric=symmetric, normalize=normalize)
+    X = import_file(inX, binary=binary, log=log, symmetric=symmetric)
 
     print 'Performing svd to %d components...' % (num_components)
     u, s, vt = svds(X,num_components)
@@ -357,11 +376,16 @@ def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1,
     if num_data_points > 0:
         rX = rX[:num_data_points,:]
 
+    if outlier_stds > 0:
+        rXf, outliers = filter_outliers(rX, outlier_stds)
+    else:
+        rXf = rX
+
     gmm = GMM(num_components, n_iter=1000, n_init=num_trials)
 
     print "Training GMM (%d initializations)..." % (num_trials)
     start = timeit.default_timer()
-    gmm.fit(rX)
+    gmm.fit(rXf)
     end = timeit.default_timer()
 
     print "Training completed in %f seconds" % (end-start)
@@ -377,7 +401,7 @@ def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1,
     return gmm, probs
 
 def train_spectral_GMM(num_components=2, num_trials=1, num_data_points=-1,
-    log=False, symmetric=False, normalize=False, binary=False):
+    log=False, symmetric=False, normalize=False, binary=False, outlier_stds=-1):
 
     print "Importing Data..."
     X = import_file(inX, binary=binary, log=log, symmetric=symmetric, normalize=normalize)
@@ -392,11 +416,16 @@ def train_spectral_GMM(num_components=2, num_trials=1, num_data_points=-1,
     if num_data_points > 0:
         components = components[:num_data_points,:]
 
-    gmm = GMM(num_components, n_iter=1000, n_init=num_trials)
+    if outlier_stds > 0:
+        components_f, outliers = filter_outliers(components, outlier_stds)
+    else:
+        components_f = components
+
+    gmm = GMM(1000, covariance_type='tied', n_iter=1000, n_init=num_trials)
 
     print "Training GMM (%d initializations)..." % num_trials
     start = timeit.default_timer()
-    gmm.fit(components)
+    gmm.fit(components_f)
     end = timeit.default_timer()
 
     print "Fitting completed in %f seconds" % (end-start)
@@ -492,7 +521,7 @@ def GMM_prediction_probs_dot(probs, save=True):
 
     return np.array([elem['probability'] for elem in preds])
 
-def train_degree_logistic_regression(num_data_points=20000, neighbors=False, log=False):
+def train_degree_logistic_regression(num_data_points=20000, neighbors=False):
 
     print "Importing Data..."
     X = import_file(inX, symmetric=False, normalize=False)
@@ -501,21 +530,21 @@ def train_degree_logistic_regression(num_data_points=20000, neighbors=False, log
     [rp, cp, dp] = readInputFile(inX)
     [rn, cn, dn] = readInputFile(inNeg)
 
-    if log:
-        dp = np.log10(dp)
+    dp = np.ones(shape=np.array(dp).shape)
 
-    num_points_per_category = num_data_points / 2
 
     print "Sampling positive and negative trials"
     positive_samples = np.vstack((rp, cp, dp))
     negative_samples = np.vstack((rn, cn, dn))
 
-    indices = np.array(range(len(rp)))
+    if num_data_points > 0:
+        indices = np.array(range(len(rp)))
 
-    positive_sample = positive_samples[:,
-            np.random.choice(indices, num_points_per_category, False)]
-    negative_sample = negative_samples[:,
-            np.random.choice(indices, num_points_per_category, False)]
+        num_points_per_category = num_data_points / 2
+        positive_sample = positive_samples[:,
+                np.random.choice(indices, num_points_per_category, False)]
+        negative_sample = negative_samples[:,
+                np.random.choice(indices, num_points_per_category, False)]
 
     both_samples = np.hstack((positive_sample, negative_sample))
     r = both_samples[0,:]
@@ -551,6 +580,7 @@ def predict_degree_logistic_regression(lr, neighbors=False):
     Xs = import_file(inY, symmetric=True, normalize=False)
     [r, c, d] = readInputFile(inY)
 
+    print "Computing common neighbors..."
     if neighbors:
         n = num_neighbors_column(Xs, r, c)
 
@@ -563,8 +593,11 @@ def predict_degree_logistic_regression(lr, neighbors=False):
 
     print "Performing Prediction..."
     start = timeit.default_timer()
-    probs = lr.predict(x_test)
+    probs = lr.predict_proba(x_test)
     end = timeit.default_timer()
+
+    #Only want the probabilities for the '1' class
+    probs = probs[:,1]
 
     print "Prediction completed in %f seconds" % (end-start)
 
