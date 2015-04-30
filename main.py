@@ -311,24 +311,37 @@ def filter_outliers(d, num_stds=10):
 # ********************************************
 # ********************************************
 # Training and Prediction Functions
+def buildSVD(num_components, binary=False, normalize=False, symmetric=False,
+    log=False):
 
-def predictSVD(clf, X, row, column):
+    X = import_file(inX, binary=binary, normalize=normalize, symmetric=symmetric,
+        log=log)
+
     start = timeit.default_timer()
-    v = clf.fit_transform(X)
-    print "   fitting done.";
-    stop = timeit.default_timer()
-    print "   runtime: " + str(stop - start)
-    u = clf.components_ 
-    d = clf.explained_variance_
-    print "d:"
-    print d
+    u, s, vt = svds(X, num_components)
+    end = timeit.default_timer()
+    print "SVD completed in %f seconds" % (end-start)
 
-    matrixY = clf.components_ 
+    return (u, s, vt)
+
+
+def predictSVD(svd, X, row, column):
+    # start = timeit.default_timer()
+    u = svd[0] #clf.components_ 
+    s = svd[1] #clf.explained_variance_
+    vt = svd[2] #clf.fit_transform(X)
+    # print "   fitting done.";
+    # stop = timeit.default_timer()
+    # print "   runtime: " + str(stop - start)
+    # print "d:"
+    # print d
+
+    # matrixY = clf.components_ 
     probsY = []
-    print "dot products:"
+    # print "dot products:"
     for i in range(len(row)):
-        print np.dot(u[:,column[i]], v[row[i],:])
-        prob = np.sum(np.dot(u[:,column[i]], v[row[i],:]) * d)
+        # print np.dot(u[:,column[i]], v[row[i],:])
+        prob = np.sum(u[column[i],:]*s*vt[:,row[i]])
         if(prob < 0): prob = 0
         if(prob > 1): prob = 1
         probsY.append(prob)
