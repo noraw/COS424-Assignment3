@@ -324,7 +324,6 @@ def buildSVD(num_components, binary=False, normalize=False, symmetric=False,
 
     return (u, s, vt)
 
-
 def predictSVD(svd, X, row, column):
     # start = timeit.default_timer()
     u = svd[0] #clf.components_ 
@@ -375,6 +374,23 @@ def runSVD(clf, X, rowY, dataY, columnY, outname):
 
     writeFileArray(rocDict, "%s_roc.csv" % outname)
     writeFileArray(probsDict, "%s_probs.csv" % outname)
+
+def runSVD_NT(num_components, outname, binary=False, normalize=False, symmetric=False, log=False):
+
+    X = import_file(inX, binary=binary, normalize=normalize,
+     symmetric=symmetric, log=log)
+    [r, c, d] = readInputFile(inY)
+
+    svd = buildSVD(num_components, binary=binary, normalize=normalize,
+        symmetric=symmetric, log=log)
+
+    start = timeit.default_timer()
+    p = predictSVD(svd, X, r, c)
+    end = timeit.default_timer()
+    print "Prediction completed in %f seconds" % (end-start)
+
+    save_probs(p, outname + '.csv')
+    save_probs_as_tprfpr(p, outname + '_probs.csv')
 
 def train_vanilla_GMM(num_components=2, num_trials=1, num_data_points=-1,
     log=False, symmetric=False, binary=False, outlier_stds=-1):
