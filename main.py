@@ -462,7 +462,7 @@ def train_spectral_GMM(num_components=2, num_trials=1, num_data_points=-1,
     else:
         components_f = components
 
-    gmm = GMM(num_components, n_iter=1000, n_init=num_trials)
+    gmm = GMM(100, n_iter=1000, n_init=num_trials)
 
     print "Training GMM (%d initializations)..." % num_trials
     start = timeit.default_timer()
@@ -562,6 +562,23 @@ def GMM_prediction_probs_dot(probs, save=True):
 
     return np.array([elem['probability'] for elem in preds])
 
+def score_GMM_pp(probs, d):
+
+    preds = np.zeros(shape=probs.shape)
+    preds[probs > 0.5] = 1
+
+    print "Precision"
+    print precision_score(d, preds)
+    print "Recall"
+    print recall_score(d, preds)
+    print "F1 Score"
+    print f1_score(d, preds)
+
+    fpr, tpr, _ = roc_curve(d, probs)
+
+    print "ROC AUC"
+    print auc(fpr, tpr)
+
 def train_degree_logistic_regression(num_data_points=20000, neighbors=False):
 
     print "Importing Data..."
@@ -594,10 +611,16 @@ def train_degree_logistic_regression(num_data_points=20000, neighbors=False):
 
     if neighbors:
         print "Finding common neighbors"
+        start = timeit.default_timer()
         n = num_neighbors_column(Xs, r, c)
+        end = timeit.default_timer()
+        print "Neighbor calculation completed in %f seconds" % (end-start)
 
     print "Transforming Data to degree..."
+    start = timeit.default_timer()
     [r, c] = transform_to_degree_data(Xs, r, c)
+    end = timeit.default_timer()
+    print "Degree calculation completed in %f seconds" % (end-start)
 
     if neighbors:
         x = np.vstack((r, c, n)).transpose()
