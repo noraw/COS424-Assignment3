@@ -20,7 +20,7 @@ from scipy import sparse
 from scipy.sparse.linalg import svds
 import timeit
 from math import sqrt
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_curve, auc, precision_score, recall_score, f1_score 
 
 # ********************************************
 #Constants 
@@ -324,7 +324,7 @@ def buildSVD(num_components, binary=False, normalize=False, symmetric=False,
 
     return (u, s, vt)
 
-def predictSVD(svd, X, row, column):
+def predictSVD(svd, row, column, d):
     # start = timeit.default_timer()
     u = svd[0] #clf.components_ 
     s = svd[1] #clf.explained_variance_
@@ -344,7 +344,19 @@ def predictSVD(svd, X, row, column):
         if(prob < 0): prob = 0
         if(prob > 1): prob = 1
         probsY.append(prob)
-    return probsY
+
+    probsY = np.array(probsY)
+    preds = np.zeros(shape=len(probsY))
+    preds[probsY >= 0.5] = 1
+
+    print "Precision"
+    print precision_score(d, preds)
+    print "Recall"
+    print recall_score(d, preds)
+    print "F-Score"
+    print f1_score(d, preds)
+
+    return probsY, preds
 
 def testSVD(clf, X, row, column, outname):
     start = timeit.default_timer()
