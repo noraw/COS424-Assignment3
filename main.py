@@ -541,12 +541,12 @@ def train_degree_logistic_regression(num_data_points=20000, neighbors=False):
         indices = np.array(range(len(rp)))
 
         num_points_per_category = num_data_points / 2
-        positive_sample = positive_samples[:,
+        positive_samples = positive_samples[:,
                 np.random.choice(indices, num_points_per_category, False)]
-        negative_sample = negative_samples[:,
+        negative_samples = negative_samples[:,
                 np.random.choice(indices, num_points_per_category, False)]
 
-    both_samples = np.hstack((positive_sample, negative_sample))
+    both_samples = np.hstack((positive_samples, negative_samples))
     r = both_samples[0,:]
     c = both_samples[1,:]
     d = both_samples[2,:]
